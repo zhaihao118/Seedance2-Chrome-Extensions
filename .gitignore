@@ -1,0 +1,5 @@
+node_modules/
+playwright/user-data/
+playwright/ext-test-user-data/
+playwright/screenshots/
+images/test-*.png
