@@ -1,17 +1,21 @@
 {
   "manifest_version": 3,
   "name": "Seedance2.0 批量生成助手",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "即梦AI Seedance2.0 批量添加参考图并生成任务",
   "permissions": [
     "activeTab",
-    "scripting"
+    "tabs",
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
     "https://jimeng.jianying.com/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "48": "icon48.png",
       "128": "icon128.png"
@@ -20,12 +24,24 @@
   "content_scripts": [
     {
       "matches": [
-        "https://jimeng.jianying.com/ai-tool/home*",
-        "https://jimeng.jianying.com/ai-tool/generate*",
         "https://jimeng.jianying.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://jimeng.jianying.com/*"
+      ],
+      "js": ["mention-main-world.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["panel.html"],
+      "matches": ["https://jimeng.jianying.com/*"]
     }
   ],
   "icons": {

@@ -1,44 +1,108 @@
 // playwright/test-extension.js
 // 使用 Playwright 加载 Chrome 扩展并测试其功能
-// 这是正确的做法：扩展是产品，Playwright 用来测试扩展
 
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 const config = require('./config');
+
+const readline = require('readline');
 
 const EXTENSION_PATH = path.resolve(__dirname, '..');
 const USER_DATA_DIR = path.resolve(__dirname, 'ext-test-user-data');
 const SCREENSHOTS_DIR = path.resolve(__dirname, 'screenshots');
+
+function waitForEnter(prompt) {
+  return new Promise(resolve => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(prompt, () => { rl.close(); resolve(); });
+  });
+}
 
 // Ensure screenshot dir exists
 if (!fs.existsSync(SCREENSHOTS_DIR)) {
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 }
 
-// Ensure test images exist
+// 生成指定尺寸的纯色 PNG (无需 canvas 依赖)
+function createTestPNG(width, height, r, g, b) {
+  // PNG signature
+  const signature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+
+  // IHDR chunk
+  const ihdrData = Buffer.alloc(13);
+  ihdrData.writeUInt32BE(width, 0);
+  ihdrData.writeUInt32BE(height, 4);
+  ihdrData[8] = 8;   // bit depth
+  ihdrData[9] = 2;   // color type: RGB
+  ihdrData[10] = 0;  // compression
+  ihdrData[11] = 0;  // filter
+  ihdrData[12] = 0;  // interlace
+  const ihdr = makePNGChunk('IHDR', ihdrData);
+
+  // IDAT chunk: raw image data (filter byte 0 + RGB pixels per row)
+  const rowSize = 1 + width * 3; // 1 filter byte + RGB
+  const rawData = Buffer.alloc(rowSize * height);
+  for (let y = 0; y < height; y++) {
+    const offset = y * rowSize;
+    rawData[offset] = 0; // filter: None
+    for (let x = 0; x < width; x++) {
+      const px = offset + 1 + x * 3;
+      rawData[px] = r;
+      rawData[px + 1] = g;
+      rawData[px + 2] = b;
+    }
+  }
+  const compressed = zlib.deflateSync(rawData);
+  const idat = makePNGChunk('IDAT', compressed);
+
+  // IEND chunk
+  const iend = makePNGChunk('IEND', Buffer.alloc(0));
+
+  return Buffer.concat([signature, ihdr, idat, iend]);
+}
+
+function makePNGChunk(type, data) {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  const typeBuffer = Buffer.from(type, 'ascii');
+  const crcData = Buffer.concat([typeBuffer, data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(crcData) >>> 0, 0);
+  return Buffer.concat([length, typeBuffer, data, crc]);
+}
+
+function crc32(buf) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) {
+    crc ^= buf[i];
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// Ensure test images exist (512x512 pixels, different colors)
 function ensureTestImages() {
   const imagesDir = path.resolve(EXTENSION_PATH, 'images');
   if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
 
-  // Create simple test PNG files if they don't exist
-  for (let i = 1; i <= 2; i++) {
+  const colors = [
+    [220, 80, 80],   // 红色
+    [80, 180, 80],   // 绿色
+    [80, 80, 220],   // 蓝色
+  ];
+
+  for (let i = 1; i <= 3; i++) {
     const filePath = path.join(imagesDir, `test-${String(i).padStart(3, '0')}.png`);
-    if (!fs.existsSync(filePath)) {
-      // Create a minimal valid PNG (1x1 pixel)
-      const png = Buffer.from([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
-        0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, // IDAT chunk
-        0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
-        0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC,
-        0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, // IEND chunk
-        0x44, 0xAE, 0x42, 0x60, 0x82,
-      ]);
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).size < 1000) {
+      // Create a 512x512 solid color PNG
+      const [r, g, b] = colors[i - 1];
+      const png = createTestPNG(512, 512, r, g, b);
       fs.writeFileSync(filePath, png);
-      console.log(`  Created test image: ${filePath}`);
+      console.log(`  Created test image: ${path.basename(filePath)} (512x512, ${png.length} bytes)`);
     }
   }
   return imagesDir;
@@ -56,6 +120,15 @@ async function screenshot(page, name) {
 }
 
 // ============================================================
+// Test Results Tracking
+// ============================================================
+const testResults = [];
+function recordTest(name, passed, detail = '') {
+  testResults.push({ name, passed, detail });
+  console.log(`${passed ? '✅' : '❌'} ${name}${detail ? ': ' + detail : ''}`);
+}
+
+// ============================================================
 // Main Test
 // ============================================================
 async function main() {
@@ -64,15 +137,22 @@ async function main() {
   console.log(`用户数据: ${USER_DATA_DIR}\n`);
 
   // Verify extension files exist
-  const requiredFiles = ['manifest.json', 'popup.html', 'popup.js', 'content.js'];
+  const requiredFiles = ['manifest.json', 'panel.html', 'panel.js', 'popup.html', 'popup.js', 'content.js', 'background.js'];
+  let allFilesExist = true;
   for (const f of requiredFiles) {
     const p = path.join(EXTENSION_PATH, f);
     if (!fs.existsSync(p)) {
       console.error(`❌ Missing extension file: ${f}`);
-      process.exit(1);
+      allFilesExist = false;
     }
   }
-  console.log('✅ 扩展文件完整\n');
+  recordTest('扩展文件完整性', allFilesExist);
+  if (!allFilesExist) process.exit(1);
+
+  // Verify icons exist
+  const iconFiles = ['icon48.png', 'icon128.png'];
+  const iconsExist = iconFiles.every(f => fs.existsSync(path.join(EXTENSION_PATH, f)));
+  recordTest('图标文件存在', iconsExist);
 
   const imagesDir = ensureTestImages();
   const testImages = fs.readdirSync(imagesDir)
@@ -80,14 +160,28 @@ async function main() {
     .map(f => path.join(imagesDir, f));
   console.log(`📁 测试图片: ${testImages.length} 张\n`);
 
+  // Validate manifest.json structure
+  const manifest = JSON.parse(fs.readFileSync(path.join(EXTENSION_PATH, 'manifest.json'), 'utf8'));
+  recordTest('Manifest V3', manifest.manifest_version === 3);
+  recordTest('Manifest 有 storage 权限', manifest.permissions.includes('storage'));
+  recordTest('Manifest 有 background', !!manifest.background?.service_worker);
+  recordTest('Manifest 有 content_scripts', Array.isArray(manifest.content_scripts) && manifest.content_scripts.length > 0);
+  recordTest('Manifest 有 tabs 权限', manifest.permissions.includes('tabs'));
+  recordTest('Manifest 无 default_popup', !manifest.action?.default_popup);
+  recordTest('Manifest 有 web_accessible_resources', Array.isArray(manifest.web_accessible_resources) && manifest.web_accessible_resources.length > 0);
+
   // Launch browser with extension loaded
-  // Chrome extensions require persistent context and non-headless mode
-  // With newer Playwright, headless: 'shell' does NOT support extensions
-  // We need headless: false with Xvfb, or the new headless mode
-  console.log('🚀 启动带扩展的浏览器...');
+  console.log('\n🚀 启动带扩展的浏览器...');
+
+  // 保留用户数据目录以保持登录状态
+  // 如需清除登录状态，手动删除目录或使用 --clean 参数
+  if (process.argv.includes('--clean') && fs.existsSync(USER_DATA_DIR)) {
+    console.log('⚠️  --clean 模式: 清除用户数据...');
+    fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });
+  }
 
   const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
-    headless: false,  // Extensions require headed mode
+    headless: false,
     args: [
       `--disable-extensions-except=${EXTENSION_PATH}`,
       `--load-extension=${EXTENSION_PATH}`,
@@ -101,137 +195,194 @@ async function main() {
   let extensionId = null;
 
   try {
-    // ---- Test 1: Extension loads successfully ----
-    console.log('\n--- Test 1: 扩展是否加载 ---');
+    // ---- Test: Extension loads successfully ----
+    console.log('\n--- Test: 扩展加载 ---');
 
-    // Get extension ID from service worker
     let serviceWorker;
     if (context.serviceWorkers().length > 0) {
       serviceWorker = context.serviceWorkers()[0];
     } else {
-      serviceWorker = await context.waitForEvent('serviceworker', { timeout: 5000 }).catch(() => null);
+      serviceWorker = await context.waitForEvent('serviceworker', { timeout: 15000 }).catch(() => null);
     }
 
     if (serviceWorker) {
       extensionId = serviceWorker.url().split('/')[2];
-      console.log(`✅ 扩展已加载, ID: ${extensionId}`);
+      recordTest('扩展加载 (service worker)', true, `ID: ${extensionId}`);
     } else {
-      // Try to find extension ID by navigating to chrome://extensions
-      console.log('⚠️  No service worker found, trying to find extension...');
-      const extPage = await context.newPage();
-      await extPage.goto('chrome://extensions/', { waitUntil: 'domcontentloaded' });
-      await sleep(1000);
-
-      // Try to get extension ID from the extensions page
-      const extIds = await extPage.evaluate(() => {
-        const manager = document.querySelector('extensions-manager');
-        if (manager && manager.shadowRoot) {
-          const itemList = manager.shadowRoot.querySelector('extensions-item-list');
-          if (itemList && itemList.shadowRoot) {
-            const items = itemList.shadowRoot.querySelectorAll('extensions-item');
-            return Array.from(items).map(item => item.id);
-          }
-        }
-        return [];
-      });
-
-      if (extIds.length > 0) {
-        extensionId = extIds[0];
-        console.log(`✅ 扩展已加载, ID: ${extensionId} (from extensions page)`);
+      // Fallback: try background pages
+      const bgPages = context.backgroundPages();
+      if (bgPages.length > 0) {
+        extensionId = new URL(bgPages[0].url()).hostname;
+        recordTest('扩展加载 (background page)', true, `ID: ${extensionId}`);
       } else {
-        console.log('⚠️  无法获取扩展ID，尝试用 background page...');
-        // For MV3, try background pages
-        const bgPages = context.backgroundPages();
-        if (bgPages.length > 0) {
-          extensionId = new URL(bgPages[0].url()).hostname;
-          console.log(`✅ 扩展已加载, ID: ${extensionId} (from background page)`);
-        }
+        // Try extensions page
+        const extPage = await context.newPage();
+        await extPage.goto('chrome://extensions/', { waitUntil: 'domcontentloaded' });
+        await sleep(1000);
+        await extPage.close();
+        recordTest('扩展加载', false, '无法获取扩展ID');
       }
-      await extPage.close();
     }
 
     if (!extensionId) {
       console.error('❌ 无法获取扩展ID，测试终止');
       await context.close();
+      printSummary();
       process.exit(1);
     }
 
-    // ---- Test 2: Popup UI loads correctly ----
-    console.log('\n--- Test 2: Popup UI 加载 ---');
-    const popupUrl = `chrome-extension://${extensionId}/popup.html`;
+    // ---- Test: Panel UI loads correctly (drawer version) ----
+    console.log('\n--- Test: Panel UI (Drawer) ---');
+    const panelUrl = `chrome-extension://${extensionId}/panel.html`;
     const popupPage = await context.newPage();
-    await popupPage.goto(popupUrl);
+    await popupPage.goto(panelUrl);
     await sleep(500);
 
-    // Check essential popup elements
     const popupChecks = await popupPage.evaluate(() => {
       return {
         title: document.querySelector('h1')?.textContent?.trim(),
         uploadArea: !!document.getElementById('uploadArea'),
         fileInput: !!document.getElementById('fileInput'),
         btnPreset: !!document.getElementById('btnPreset'),
-        btnGenerate: !!document.getElementById('btnGenerate'),
+        btnDoGenerate: !!document.getElementById('btnDoGenerate'),
+        btnCheckPage: !!document.getElementById('btnCheckPage'),
         promptInput: !!document.getElementById('promptInput'),
         fileList: !!document.getElementById('fileList'),
         progress: !!document.getElementById('progress'),
         log: !!document.getElementById('log'),
+        connStatus: !!document.getElementById('connStatus'),
+        taskDelay: !!document.getElementById('taskDelay'),
+        presetEditor: !!document.getElementById('presetEditor'),
+        presetEditToggle: !!document.getElementById('presetEditToggle'),
+        tagModel: !!document.getElementById('tagModel'),
+        tagRefMode: !!document.getElementById('tagRefMode'),
+        tagRatio: !!document.getElementById('tagRatio'),
+        tagDuration: !!document.getElementById('tagDuration'),
+        btnCollapse: !!document.getElementById('btnCollapse'),
       };
     });
 
     console.log(`  标题: ${popupChecks.title}`);
-    const allPresent = popupChecks.uploadArea && popupChecks.fileInput &&
-      popupChecks.btnPreset && popupChecks.btnGenerate &&
+    const coreElements = popupChecks.uploadArea && popupChecks.fileInput &&
+      popupChecks.btnPreset && popupChecks.btnDoGenerate &&
       popupChecks.promptInput && popupChecks.fileList;
+    recordTest('Panel 核心元素', coreElements);
 
-    if (allPresent) {
-      console.log('✅ Popup UI 所有元素正常');
-    } else {
-      console.log('❌ Popup UI 缺少元素:', JSON.stringify(popupChecks, null, 2));
-    }
+    const newElements = popupChecks.btnCheckPage && popupChecks.connStatus &&
+      popupChecks.taskDelay && popupChecks.presetEditor &&
+      popupChecks.presetEditToggle && popupChecks.btnCollapse;
+    recordTest('Panel 新增元素 (含收起按钮)', newElements);
+
+    const presetTags = popupChecks.tagModel && popupChecks.tagRefMode &&
+      popupChecks.tagRatio && popupChecks.tagDuration;
+    recordTest('Panel 预设标签', presetTags);
+
     await screenshot(popupPage, 'popup-loaded');
 
-    // ---- Test 3: File upload in popup ----
-    console.log('\n--- Test 3: Popup 文件选择 ---');
+    // ---- Test: File upload in popup ----
+    console.log('\n--- Test: 文件选择 ---');
     const fileInput = popupPage.locator('#fileInput');
     await fileInput.setInputFiles(testImages.slice(0, 2));
     await sleep(500);
 
-    const fileCountAfter = await popupPage.evaluate(() => {
+    const fileState = await popupPage.evaluate(() => {
       const countEl = document.getElementById('fileCount');
       const items = document.querySelectorAll('.file-item');
       return {
         countText: countEl?.textContent,
         itemCount: items.length,
-        generateBtnText: document.getElementById('btnGenerate')?.textContent,
-        generateDisabled: document.getElementById('btnGenerate')?.disabled,
+        generateBtnText: document.getElementById('btnDoGenerate')?.textContent,
+        generateDisabled: document.getElementById('btnDoGenerate')?.disabled,
       };
     });
 
-    console.log(`  文件数: ${fileCountAfter.countText}`);
-    console.log(`  列表项: ${fileCountAfter.itemCount}`);
-    console.log(`  按钮文本: ${fileCountAfter.generateBtnText}`);
-    console.log(`  按钮禁用: ${fileCountAfter.generateDisabled}`);
+    console.log(`  文件数: ${fileState.countText}`);
+    console.log(`  列表项: ${fileState.itemCount}`);
+    recordTest('文件选择 - 数量正确', fileState.itemCount === 2);
+    recordTest('文件选择 - 按钮启用', !fileState.generateDisabled);
 
-    if (fileCountAfter.itemCount === 2 && !fileCountAfter.generateDisabled) {
-      console.log('✅ 文件选择功能正常');
-    } else {
-      console.log('❌ 文件选择异常');
-    }
     await screenshot(popupPage, 'popup-files-added');
 
-    // ---- Test 4: Prompt input ----
-    console.log('\n--- Test 4: 提示词输入 ---');
+    // ---- Test: Add more files ----
+    console.log('\n--- Test: 追加文件 ---');
+    await fileInput.setInputFiles(testImages.slice(2, 3));
+    await sleep(300);
+
+    const fileState2 = await popupPage.evaluate(() => ({
+      itemCount: document.querySelectorAll('.file-item').length,
+    }));
+    recordTest('追加文件', fileState2.itemCount === 3);
+
+    // ---- Test: Remove single file ----
+    console.log('\n--- Test: 删除单个文件 ---');
+    await popupPage.click('.file-item:first-child .remove');
+    await sleep(300);
+
+    const fileState3 = await popupPage.evaluate(() => ({
+      itemCount: document.querySelectorAll('.file-item').length,
+    }));
+    recordTest('删除单个文件', fileState3.itemCount === 2);
+
+    // ---- Test: Prompt input ----
+    console.log('\n--- Test: 提示词输入 ---');
     const testPrompt = '跳舞的女孩';
     await popupPage.fill('#promptInput', testPrompt);
     const promptValue = await popupPage.inputValue('#promptInput');
-    if (promptValue === testPrompt) {
-      console.log('✅ 提示词输入正常');
-    } else {
-      console.log('❌ 提示词输入异常');
-    }
+    recordTest('提示词输入', promptValue === testPrompt);
 
-    // ---- Test 5: Navigate to Jimeng AI and verify content script ----
-    console.log('\n--- Test 5: 内容脚本注入 ---');
+    // ---- Test: Task delay input ----
+    console.log('\n--- Test: 任务间隔设置 ---');
+    await popupPage.fill('#taskDelay', '5');
+    const delayValue = await popupPage.inputValue('#taskDelay');
+    recordTest('任务间隔设置', delayValue === '5');
+
+    // ---- Test: Preset editor toggle ----
+    console.log('\n--- Test: 预设编辑器 ---');
+    await popupPage.click('#presetEditToggle');
+    await sleep(300);
+
+    const editorVisible = await popupPage.evaluate(() => {
+      const editor = document.getElementById('presetEditor');
+      const display = document.getElementById('presetDisplay');
+      return {
+        editorVisible: editor?.style.display !== 'none',
+        displayHidden: display?.style.display === 'none',
+      };
+    });
+    recordTest('预设编辑器打开', editorVisible.editorVisible && editorVisible.displayHidden);
+
+    // Change a preset value
+    await popupPage.selectOption('#cfgDuration', '10s');
+    await popupPage.click('#presetSave');
+    await sleep(300);
+
+    const afterSave = await popupPage.evaluate(() => ({
+      editorHidden: document.getElementById('presetEditor')?.style.display === 'none',
+      durationTag: document.getElementById('tagDuration')?.textContent,
+    }));
+    recordTest('预设保存', afterSave.editorHidden && afterSave.durationTag?.includes('10s'));
+
+    // Reset back
+    await popupPage.click('#presetEditToggle');
+    await sleep(200);
+    await popupPage.selectOption('#cfgDuration', '5s');
+    await popupPage.click('#presetSave');
+    await sleep(200);
+
+    await screenshot(popupPage, 'popup-preset-edited');
+
+    // ---- Test: Clear button ----
+    console.log('\n--- Test: 清空按钮 ---');
+    await popupPage.click('#btnClear');
+    await sleep(300);
+    const afterClear = await popupPage.evaluate(() => ({
+      items: document.querySelectorAll('.file-item').length,
+      disabled: document.getElementById('btnDoGenerate')?.disabled,
+    }));
+    recordTest('清空功能', afterClear.items === 0 && afterClear.disabled);
+
+    // ---- Test: Navigate to Jimeng AI ----
+    console.log('\n--- Test: 即梦AI页面加载 ---');
     const jimengPage = await context.newPage();
     await jimengPage.goto('https://jimeng.jianying.com/ai-tool/home', {
       waitUntil: 'domcontentloaded',
@@ -239,63 +390,118 @@ async function main() {
     });
     await sleep(3000);
 
-    // Check if content script was injected
-    const contentScriptLoaded = await jimengPage.evaluate(() => {
-      return new Promise(resolve => {
-        // Check console for content script message
-        // We'll check by trying to send a message via chrome.runtime
-        // Since we're in page context, we can't directly check.
-        // But we can check if the content script added any markers.
-        // The content script logs '[Seedance批量助手] Content script loaded'
-        // We can try a different approach: check the DOM for content script effects
-        resolve(true); // Content script is loaded if no error
-      });
-    });
-
-    // Verify the page loaded
     const pageUrl = jimengPage.url();
-    console.log(`  页面URL: ${pageUrl}`);
     const isJimeng = pageUrl.includes('jimeng.jianying.com');
-    if (isJimeng) {
-      console.log('✅ 即梦AI 页面已加载');
-    } else {
-      console.log('⚠️  页面可能被重定向');
-    }
+    recordTest('即梦AI页面加载', isJimeng);
     await screenshot(jimengPage, 'jimeng-page');
 
-    // Check if the page has the expected toolbar elements
-    const pageElements = await jimengPage.evaluate(() => {
+    // ---- Test: Drawer injection ----
+    console.log('\n--- Test: 侧边抽屉注入 ---');
+    await sleep(2000);
+
+    const drawerState = await jimengPage.evaluate(() => {
       return {
-        hasToolbar: !!document.querySelector('[class*="toolbar-settings"]'),
-        hasLvSelect: document.querySelectorAll('.lv-select').length,
-        hasSubmitBtn: !!document.querySelector('[class*="submit-button"]'),
-        hasUploadArea: !!document.querySelector('[class*="reference-upload"]') ||
-          !!document.querySelector('input[type="file"]'),
-        hasTextarea: !!document.querySelector('textarea[class*="prompt-textarea"]') ||
-          !!document.querySelector('textarea'),
+        hasContainer: !!document.getElementById('seedance-drawer-container'),
+        hasToggle: !!document.getElementById('seedance-drawer-toggle'),
+        hasIframe: !!document.getElementById('seedance-drawer-iframe'),
       };
     });
-    console.log('  页面元素检查:', JSON.stringify(pageElements, null, 2));
 
-    // ---- Test 6: Test popup → content script communication ----
-    console.log('\n--- Test 6: Popup → Content Script 通信 ---');
+    recordTest('抽屉容器注入', drawerState.hasContainer);
+    recordTest('抽屉切换按钮注入', drawerState.hasToggle);
+    recordTest('抽屉 iframe 注入', drawerState.hasIframe);
 
-    // We'll test by sending a message from the popup and checking if
-    // the content script responds. We need the tab ID of the jimeng page.
-    // In extension test, the popup page can use chrome.tabs API.
+    // ---- Test: Drawer toggle ----
+    console.log('\n--- Test: 抽屉展开/收起 ---');
+    await jimengPage.click('#seedance-drawer-toggle');
+    await sleep(500);
 
-    // First, get the tab ID of the jimeng page
-    const jimengTabId = await popupPage.evaluate(async (targetUrl) => {
+    const drawerOpenState = await jimengPage.evaluate(() => {
+      const container = document.getElementById('seedance-drawer-container');
+      return {
+        transform: container?.style.transform,
+        isOpen: container?.style.transform === 'translateX(0px)' || container?.style.transform === 'translateX(0)',
+      };
+    });
+    recordTest('抽屉展开', drawerOpenState.isOpen, `transform: ${drawerOpenState.transform}`);
+    await screenshot(jimengPage, 'drawer-open');
+
+    // Close drawer
+    await jimengPage.click('#seedance-drawer-toggle');
+    await sleep(500);
+
+    const drawerClosedState = await jimengPage.evaluate(() => {
+      const container = document.getElementById('seedance-drawer-container');
+      return {
+        transform: container?.style.transform,
+        isClosed: container?.style.transform.includes('100%'),
+      };
+    });
+    recordTest('抽屉收起', drawerClosedState.isClosed, `transform: ${drawerClosedState.transform}`);
+    await screenshot(jimengPage, 'drawer-closed');
+
+    // ---- 等待用户手动登录 ----
+    console.log('\n⏸️  请在浏览器中登录即梦AI账号，登录完成后回到终端按 Enter 继续测试...');
+    await waitForEnter('👉 按 Enter 继续...');
+    console.log('▶️  继续测试...\n');
+    await sleep(2000);
+
+    // 捕获即梦页面的 console 日志 (用于调试提示词填充)
+    const jimengConsoleLogs = [];
+    jimengPage.on('console', msg => {
+      const text = msg.text();
+      if (text.includes('[Seedance批量]') || text.includes('[Seedance-PM]')) {
+        jimengConsoleLogs.push(text);
+        console.log(`  [页面日志] ${text}`);
+      }
+    });
+
+    // 捕获页面错误 (便于调试 MAIN world 脚本问题)
+    jimengPage.on('pageerror', err => {
+      console.log(`  [页面错误] ${err.message}`);
+    });
+
+    // ---- Test: Content script communication ----
+    console.log('\n--- Test: 内容脚本通信 ---');
+
+    const jimengTabId = await popupPage.evaluate(async () => {
       const tabs = await chrome.tabs.query({});
       const tab = tabs.find(t => t.url && t.url.includes('jimeng.jianying.com'));
       return tab ? tab.id : null;
-    }, pageUrl);
+    });
 
     if (jimengTabId) {
       console.log(`  即梦 Tab ID: ${jimengTabId}`);
 
-      // Try sending a test message to the content script
-      const msgResult = await popupPage.evaluate(async (tabId) => {
+      // Test ping
+      const pingResult = await popupPage.evaluate(async (tabId) => {
+        try {
+          const response = await chrome.tabs.sendMessage(tabId, { action: 'ping' });
+          return { success: true, response };
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
+      }, jimengTabId);
+
+      recordTest('Ping 通信', pingResult.success && pingResult.response?.ready === true);
+
+      // Test getPageInfo
+      const pageInfoResult = await popupPage.evaluate(async (tabId) => {
+        try {
+          const response = await chrome.tabs.sendMessage(tabId, { action: 'getPageInfo' });
+          return { success: true, response };
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
+      }, jimengTabId);
+
+      recordTest('getPageInfo 通信', pageInfoResult.success && pageInfoResult.response?.info?.url);
+      if (pageInfoResult.success) {
+        console.log(`  页面信息: ${JSON.stringify(pageInfoResult.response.info)}`);
+      }
+
+      // Test generateTask message
+      const taskResult = await popupPage.evaluate(async (tabId) => {
         try {
           const response = await chrome.tabs.sendMessage(tabId, {
             action: 'generateTask',
@@ -314,85 +520,303 @@ async function main() {
         }
       }, jimengTabId);
 
-      if (msgResult.success) {
-        console.log('✅ Popup → Content Script 通信正常');
-        console.log(`  Response: ${JSON.stringify(msgResult.response)}`);
-      } else {
-        console.log(`⚠️  通信可能失败: ${msgResult.error}`);
-        console.log('  (如果未登录即梦AI，内容脚本可能无法操作页面元素)');
-      }
+      // The task itself may fail (page not logged in), but communication should work
+      recordTest('generateTask 通信', taskResult.success);
+      console.log(`  Task结果: ${JSON.stringify(taskResult.response)}`);
     } else {
-      console.log('⚠️  未找到即梦AI标签页');
+      recordTest('内容脚本通信', false, '未找到即梦AI标签页');
     }
 
-    await screenshot(jimengPage, 'after-communication-test');
+    await screenshot(jimengPage, 'after-tests');
 
-    // ---- Test 7: Test preset button ----
-    console.log('\n--- Test 7: 预设参数按钮 ---');
-
-    // Focus on jimeng tab (make it active)
-    await jimengPage.bringToFront();
-    await sleep(500);
-
-    // Now click the preset button from popup
-    await popupPage.bringToFront();
-    const presetBtnText = await popupPage.textContent('#btnPreset');
-    console.log(`  按钮文本: ${presetBtnText}`);
-
-    // Click always applies to active tab, so we need jimeng to be active
-    // But since we're testing in the popup page context, we can execute directly
+    // ---- Test: 提示词填充到 ProseMirror 编辑器 ----
+    console.log('\n--- Test: 提示词填充验证 ---');
     if (jimengTabId) {
-      const presetResult = await popupPage.evaluate(async (tabId) => {
-        const btn = document.getElementById('btnPreset');
-        if (!btn) return { error: 'Button not found' };
-        // Simulate clicking the preset button
-        btn.click();
-        // Wait for it to complete
-        await new Promise(r => setTimeout(r, 3000));
-        return { btnText: btn.textContent };
+      // 测试1: 检查是否能找到 ProseMirror 编辑器
+      const editorCheck = await popupPage.evaluate(async (tabId) => {
+        try {
+          const response = await chrome.tabs.sendMessage(tabId, {
+            action: 'getPromptText',
+          });
+          return response;
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
+      }, jimengTabId);
+      recordTest('找到提示词编辑器', editorCheck.success && editorCheck.hasEditor);
+      console.log(`  编辑器存在: ${editorCheck.hasEditor}, 当前内容: "${editorCheck.currentText || ''}"`);
+
+      // 测试2: 设置提示词并验证 <p> 标签内容
+      const testPromptText = '跳舞的女孩 test prompt';
+      const setResult = await popupPage.evaluate(async ({ tabId, promptText }) => {
+        try {
+          const response = await chrome.tabs.sendMessage(tabId, {
+            action: 'setPrompt',
+            prompt: promptText,
+          });
+          return response;
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
+      }, { tabId: jimengTabId, promptText: testPromptText });
+
+      recordTest('setPrompt 消息通信', setResult.success);
+      console.log(`  setPrompt 结果: currentText="${setResult.currentText || ''}"`);
+      // 等待页面日志输出
+      await sleep(1000);
+      console.log(`  累计捕获 ${jimengConsoleLogs.length} 条 [Seedance批量] 日志`);
+
+      // 验证 <p> 标签内容与预期一致
+      const promptMatch = setResult.success && setResult.currentText &&
+        setResult.currentText.includes(testPromptText);
+      recordTest('提示词内容比对', promptMatch,
+        `期望: "${testPromptText}" | 实际: "${setResult.currentText || '(空)'}"`);
+
+      await screenshot(jimengPage, 'prompt-filled');
+
+      // 测试3: 重新设置不同的提示词，验证能覆盖
+      const testPromptText2 = '赛博朋克城市夜景';
+      console.log(`\n  设置第二个提示词: "${testPromptText2}"`);
+      const setResult2 = await popupPage.evaluate(async ({ tabId, promptText }) => {
+        try {
+          const response = await chrome.tabs.sendMessage(tabId, {
+            action: 'setPrompt',
+            prompt: promptText,
+          });
+          return response;
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
+      }, { tabId: jimengTabId, promptText: testPromptText2 });
+
+      await sleep(1000);
+      const promptMatch2 = setResult2.success && setResult2.currentText &&
+        setResult2.currentText.includes(testPromptText2);
+      recordTest('提示词覆盖比对', promptMatch2,
+        `期望: "${testPromptText2}" | 实际: "${setResult2.currentText || '(空)'}"`);
+
+      // 再次通过 getPromptText 独立验证
+      const verifyResult = await popupPage.evaluate(async (tabId) => {
+        try {
+          const response = await chrome.tabs.sendMessage(tabId, {
+            action: 'getPromptText',
+          });
+          return response;
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
       }, jimengTabId);
 
-      console.log(`  应用后按钮: ${presetResult.btnText || presetResult.error}`);
-      if (presetResult.btnText && presetResult.btnText.includes('已应用')) {
-        console.log('✅ 预设参数按钮工作正常');
-      } else {
-        console.log('⚠️  预设可能未完全应用（需要登录状态才能操作页面）');
+      const verifyMatch = verifyResult.success && verifyResult.currentText &&
+        verifyResult.currentText.includes(testPromptText2);
+      recordTest('独立读取验证提示词', verifyMatch,
+        `读取: "${verifyResult.currentText || '(空)'}"`);
+
+      // 输出所有捕获的 Seedance 日志
+      if (jimengConsoleLogs.length > 0) {
+        console.log(`\n  --- 页面 Seedance 日志汇总 (${jimengConsoleLogs.length} 条) ---`);
+        jimengConsoleLogs.forEach((log, i) => console.log(`  ${i + 1}. ${log}`));
+      }
+
+      await screenshot(jimengPage, 'prompt-overwritten');
+    } else {
+      recordTest('提示词填充', false, '未找到即梦AI标签页');
+    }
+
+    // ---- Test: Preset button ----
+    console.log('\n--- Test: 预设按钮 ---');
+    if (jimengTabId) {
+      await jimengPage.bringToFront();
+      await sleep(300);
+      await popupPage.bringToFront();
+
+      // In test mode, popup opens as standalone page, so chrome.tabs.query
+      // returns the popup tab itself, not the jimeng tab. We test the button
+      // click executes without errors and the applyPreset message works directly.
+      const presetResult = await popupPage.evaluate(async (tabId) => {
+        try {
+          // 使用"全能参考"模式 — 这是 @mention 引用功能所需的模式
+          const response = await chrome.tabs.sendMessage(tabId, {
+            action: 'applyPreset',
+            preset: {
+              model: 'Seedance 2.0',
+              referenceMode: '全能参考',
+              aspectRatio: '16:9',
+              duration: '5s',
+            },
+          });
+          return { success: true, response };
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
+      }, jimengTabId);
+
+      recordTest('预设消息通信', presetResult.success, JSON.stringify(presetResult.response));
+    }
+
+    // ---- Test: doGenerate with @mention ----
+    console.log('\n--- Test: doGenerate + @mention 提示词 ---');
+    if (jimengTabId) {
+      await jimengPage.bringToFront();
+      await sleep(1000);
+
+      // 准备 2 张图片的 base64 数据
+      const img1Path = testImages[0];
+      const img2Path = testImages[1];
+      const img1Base64 = 'data:image/png;base64,' + fs.readFileSync(img1Path).toString('base64');
+      const img2Base64 = 'data:image/png;base64,' + fs.readFileSync(img2Path).toString('base64');
+
+      const mentionPrompt = '一个女孩 (@图片1) 在跳舞 (@图片2)';
+      console.log(`  提示词: "${mentionPrompt}"`);
+      console.log(`  文件: ${path.basename(img1Path)}, ${path.basename(img2Path)}`);
+
+      const doGenResult = await popupPage.evaluate(async ({ tabId, files, prompt }) => {
+        try {
+          const response = await chrome.tabs.sendMessage(tabId, {
+            action: 'doGenerate',
+            files: files,
+            prompt: prompt,
+          });
+          return { success: true, response };
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
+      }, {
+        tabId: jimengTabId,
+        files: [
+          { name: path.basename(img1Path), data: img1Base64, type: 'image/png' },
+          { name: path.basename(img2Path), data: img2Base64, type: 'image/png' },
+        ],
+        prompt: mentionPrompt,
+      });
+
+      recordTest('doGenerate 通信', doGenResult.success,
+        JSON.stringify(doGenResult.response || doGenResult.error));
+
+      // 等待处理完成 (MAIN world 中的 setTimeout 链 + @ 弹窗操作需要较长时间)
+      await sleep(10000);
+
+      // 验证编辑器内容是否包含 mention 标签
+      const mentionCheck = await jimengPage.evaluate(() => {
+        const editor = document.querySelector('.tiptap.ProseMirror[contenteditable="true"]');
+        if (!editor) return { error: '未找到编辑器' };
+
+        const text = editor.textContent || '';
+        const html = editor.innerHTML || '';
+        const mentionNodes = editor.querySelectorAll('[data-type="reference-mention-tag"]');
+
+        // 也检查 PM 状态
+        let pmInfo = null;
+        if (editor.pmViewDesc && editor.pmViewDesc.view) {
+          const state = editor.pmViewDesc.view.state;
+          const mentions = [];
+          state.doc.descendants((node) => {
+            if (node.type.name === 'reference-mention-tag') {
+              mentions.push({ id: node.attrs.id });
+            }
+          });
+          pmInfo = { docSize: state.doc.content.size, mentions };
+        }
+
+        return {
+          text: text.substring(0, 200),
+          htmlSnippet: html.substring(0, 500),
+          mentionNodeCount: mentionNodes.length,
+          pmInfo,
+        };
+      });
+
+      console.log(`  编辑器文本: "${mentionCheck.text}"`);
+      console.log(`  mention DOM 节点: ${mentionCheck.mentionNodeCount}`);
+      if (mentionCheck.pmInfo) {
+        console.log(`  PM doc size: ${mentionCheck.pmInfo.docSize}`);
+        console.log(`  PM mentions: ${JSON.stringify(mentionCheck.pmInfo.mentions)}`);
+      }
+      console.log(`  HTML 片段: ${mentionCheck.htmlSnippet?.substring(0, 200)}`);
+
+      const hasMentions = (mentionCheck.mentionNodeCount || 0) > 0 ||
+        (mentionCheck.pmInfo?.mentions?.length || 0) > 0;
+      const hasText = mentionCheck.text && mentionCheck.text.includes('女孩');
+      recordTest('@mention 标签插入', hasMentions, `mention=${mentionCheck.mentionNodeCount}`);
+      recordTest('@mention 文本保留', hasText, `"${mentionCheck.text?.substring(0, 50)}"`);
+
+      await screenshot(jimengPage, 'mention-test');
+
+      // 输出最近的 Seedance 日志
+      const recentLogs = jimengConsoleLogs.slice(-15);
+      if (recentLogs.length > 0) {
+        console.log(`\n  --- @mention 相关日志 (最近 ${recentLogs.length} 条) ---`);
+        recentLogs.forEach((log, i) => console.log(`  ${i + 1}. ${log}`));
       }
     }
 
-    // ---- Test 8: Clear button ----
-    console.log('\n--- Test 8: 清空按钮 ---');
-    await popupPage.click('#btnClear');
-    await sleep(300);
-    const afterClear = await popupPage.evaluate(() => {
+    // ---- Test: Connection check button ----
+    console.log('\n--- Test: 连接检查按钮 ---');
+    await popupPage.bringToFront();
+    await popupPage.click('#btnCheckPage');
+    await sleep(1000);
+
+    const connResult = await popupPage.evaluate(() => {
+      const el = document.getElementById('connStatus');
       return {
-        items: document.querySelectorAll('.file-item').length,
-        disabled: document.getElementById('btnGenerate')?.disabled,
+        text: el?.textContent,
+        hasClass: el?.className,
       };
     });
-    if (afterClear.items === 0 && afterClear.disabled) {
-      console.log('✅ 清空功能正常');
-    } else {
-      console.log('❌ 清空功能异常');
-    }
+    recordTest('连接检查按钮', connResult.text && connResult.text.length > 0, connResult.text);
 
-    // ---- Summary ----
-    console.log('\n========================================');
-    console.log('  扩展测试完成');
-    console.log('========================================');
-    console.log('如需完整的生成流程测试，请先运行:');
-    console.log('  HEADLESS=false node playwright/login.js');
-    console.log('登录即梦AI后再运行此测试\n');
+    // ---- Test: Storage persistence ----
+    console.log('\n--- Test: Storage 持久化 ---');
+    // Re-add files and save prompt
+    await fileInput.setInputFiles(testImages.slice(0, 1));
+    await popupPage.fill('#promptInput', '持久化测试');
+    await popupPage.fill('#taskDelay', '3');
+    // Trigger blur to save
+    await popupPage.click('h1');
+    await sleep(500);
 
-    await popupPage.close();
-    await jimengPage.close();
+    const storageData = await popupPage.evaluate(async () => {
+      const data = await chrome.storage.local.get(['preset', 'prompt', 'taskDelay']);
+      return data;
+    });
+
+    recordTest('Storage 保存预设', !!storageData.preset);
+    recordTest('Storage 保存提示词', storageData.prompt === '持久化测试');
+    recordTest('Storage 保存间隔', storageData.taskDelay === 3);
+
+    await screenshot(popupPage, 'final');
+
+    await screenshot(popupPage, 'final');
 
   } catch (err) {
     console.error('❌ 测试出错:', err.message);
     console.error(err.stack);
-  } finally {
-    await context.close();
+    recordTest('测试运行', false, err.message);
   }
+
+  printSummary();
+
+  // 保持浏览器打开，等待用户手动关闭
+  console.log('\n🖥️  浏览器保持打开，可手动操作验证。关闭浏览器后程序自动退出。');
+  await new Promise(resolve => context.on('close', resolve));
+}
+
+function printSummary() {
+  console.log('\n' + '═'.repeat(50));
+  console.log('  测试结果汇总');
+  console.log('═'.repeat(50));
+
+  const passed = testResults.filter(t => t.passed).length;
+  const failed = testResults.filter(t => !t.passed).length;
+  const total = testResults.length;
+
+  testResults.forEach(t => {
+    console.log(`  ${t.passed ? '✅' : '❌'} ${t.name}${t.detail ? ' - ' + t.detail : ''}`);
+  });
+
+  console.log('─'.repeat(50));
+  console.log(`  总计: ${total} | 通过: ${passed} | 失败: ${failed}`);
+  console.log('═'.repeat(50));
 }
 
 main().catch(console.error);

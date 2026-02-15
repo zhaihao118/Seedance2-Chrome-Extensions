@@ -4,94 +4,106 @@
   <meta charset="UTF-8">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      width: 420px;
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #1a1a2e;
       color: #e0e0e0;
-      padding: 16px;
     }
-    h1 {
-      font-size: 16px;
-      color: #fff;
-      margin-bottom: 12px;
+    body {
+      padding: 14px;
+    }
+    body::-webkit-scrollbar { width: 5px; }
+    body::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+    body::-webkit-scrollbar-track { background: transparent; }
+
+    .header {
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: space-between;
+      margin-bottom: 12px;
     }
-    h1::before {
-      content: '🎬';
+    .header h1 {
+      font-size: 15px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
+    .header h1::before { content: '🎬'; }
+    .btn-collapse {
+      background: none;
+      border: none;
+      color: #8b8fa3;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .btn-collapse:hover { color: #fff; background: rgba(255,255,255,0.1); }
+
     .section {
       background: #16213e;
       border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
     }
     .section-title {
-      font-size: 13px;
+      font-size: 12px;
       color: #8b8fa3;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .preset-info {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 6px;
+      gap: 5px;
     }
     .preset-tag {
       background: #0f3460;
       border-radius: 4px;
-      padding: 4px 8px;
-      font-size: 12px;
+      padding: 3px 6px;
+      font-size: 11px;
       color: #a8d8ea;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
+
     .upload-area {
       border: 2px dashed #0f3460;
       border-radius: 8px;
-      padding: 24px;
+      padding: 16px 10px;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .upload-area:hover {
       border-color: #e94560;
       background: rgba(233, 69, 96, 0.05);
     }
-    .upload-area .icon {
-      font-size: 32px;
-      margin-bottom: 8px;
-    }
-    .upload-area .text {
-      font-size: 13px;
-      color: #8b8fa3;
-    }
-    .upload-area .hint {
-      font-size: 11px;
-      color: #555;
-      margin-top: 4px;
-    }
-    #fileInput {
-      display: none;
-    }
+    .upload-area .icon { font-size: 28px; margin-bottom: 4px; }
+    .upload-area .text { font-size: 12px; color: #8b8fa3; }
+    .upload-area .hint { font-size: 10px; color: #555; margin-top: 2px; }
+    #fileInput { display: none; }
+
     .file-list {
-      max-height: 150px;
+      max-height: 120px;
       overflow-y: auto;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
-    .file-list::-webkit-scrollbar {
-      width: 4px;
-    }
-    .file-list::-webkit-scrollbar-thumb {
-      background: #0f3460;
-      border-radius: 2px;
-    }
+    .file-list::-webkit-scrollbar { width: 3px; }
+    .file-list::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 2px; }
     .file-item {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 4px 8px;
-      font-size: 12px;
+      padding: 3px 6px;
+      font-size: 11px;
       background: #16213e;
       border-radius: 4px;
       margin-bottom: 2px;
@@ -101,37 +113,36 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      margin-right: 8px;
+      margin-right: 6px;
     }
     .file-item .remove {
       color: #e94560;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
       flex-shrink: 0;
     }
+
     .status-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
-    .count {
-      font-size: 13px;
-      color: #a8d8ea;
-    }
+    .count { font-size: 12px; color: #a8d8ea; }
     .clear-btn {
-      font-size: 12px;
+      font-size: 11px;
       color: #e94560;
       cursor: pointer;
       background: none;
       border: none;
     }
+
     .btn {
       width: 100%;
-      padding: 10px;
+      padding: 8px;
       border: none;
-      border-radius: 8px;
-      font-size: 14px;
+      border-radius: 6px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
@@ -140,35 +151,27 @@
       background: linear-gradient(135deg, #e94560, #c23152);
       color: #fff;
     }
-    .btn-primary:hover {
-      opacity: 0.9;
-    }
-    .btn-primary:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-preset {
       background: linear-gradient(135deg, #0f3460, #16213e);
       color: #a8d8ea;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       border: 1px solid #0f3460;
     }
-    .btn-preset:hover {
-      border-color: #a8d8ea;
-    }
+    .btn-preset:hover { border-color: #a8d8ea; }
+
     .progress {
-      margin-top: 12px;
+      margin-top: 10px;
       display: none;
     }
-    .progress.active {
-      display: block;
-    }
+    .progress.active { display: block; }
     .progress-bar {
       background: #0f3460;
       border-radius: 4px;
-      height: 6px;
+      height: 5px;
       overflow: hidden;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     .progress-fill {
       height: 100%;
@@ -178,84 +181,74 @@
       width: 0%;
     }
     .progress-text {
-      font-size: 12px;
+      font-size: 11px;
       color: #8b8fa3;
       text-align: center;
     }
+
     .log {
-      margin-top: 8px;
-      max-height: 100px;
+      margin-top: 6px;
+      max-height: 80px;
       overflow-y: auto;
-      font-size: 11px;
+      font-size: 10px;
       color: #8b8fa3;
       background: #111;
       border-radius: 4px;
-      padding: 6px;
+      padding: 5px;
       display: none;
     }
-    .log.active {
-      display: block;
-    }
+    .log.active { display: block; }
     .log p { margin-bottom: 2px; }
     .log .success { color: #4caf50; }
     .log .error { color: #e94560; }
-    .prompt-section {
-      margin-bottom: 12px;
-    }
+
+    .prompt-section { margin-bottom: 10px; }
     .prompt-input {
       width: 100%;
-      height: 60px;
+      height: 50px;
       background: #16213e;
       border: 1px solid #0f3460;
       border-radius: 6px;
       color: #e0e0e0;
-      padding: 8px;
-      font-size: 12px;
+      padding: 6px 8px;
+      font-size: 11px;
       resize: vertical;
       font-family: inherit;
     }
-    .prompt-input::placeholder {
-      color: #555;
-    }
-    .prompt-input:focus {
-      outline: none;
-      border-color: #a8d8ea;
-    }
+    .prompt-input::placeholder { color: #555; }
+    .prompt-input:focus { outline: none; border-color: #a8d8ea; }
+
     .cfg-select {
       width: 100%;
       background: #0f3460;
       color: #a8d8ea;
       border: 1px solid #16213e;
       border-radius: 4px;
-      padding: 4px 6px;
-      font-size: 12px;
+      padding: 3px 5px;
+      font-size: 11px;
       margin-top: 2px;
       cursor: pointer;
     }
-    .cfg-select:focus {
-      outline: none;
-      border-color: #a8d8ea;
-    }
+    .cfg-select:focus { outline: none; border-color: #a8d8ea; }
+
     .btn-sm {
-      padding: 4px 8px;
+      padding: 3px 7px;
       border: none;
       border-radius: 4px;
-      font-size: 11px;
+      font-size: 10px;
       cursor: pointer;
       background: #e94560;
       color: #fff;
     }
     .btn-sm:hover { opacity: 0.9; }
-    .btn-sm-cancel {
-      background: #0f3460;
-      color: #a8d8ea;
-    }
+    .btn-sm-cancel { background: #0f3460; color: #a8d8ea; }
+
     .conn-status {
-      font-size: 11px;
+      font-size: 10px;
       text-align: center;
-      padding: 4px;
+      padding: 3px;
       border-radius: 4px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       display: none;
     }
     .conn-status.connected {
@@ -268,35 +261,36 @@
       background: rgba(233, 69, 96, 0.15);
       color: #e94560;
     }
+
     .task-delay-section {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-      font-size: 12px;
+      gap: 6px;
+      margin-bottom: 10px;
+      font-size: 11px;
       color: #8b8fa3;
     }
     .task-delay-input {
-      width: 60px;
+      width: 50px;
       background: #16213e;
       border: 1px solid #0f3460;
       border-radius: 4px;
       color: #e0e0e0;
-      padding: 4px 6px;
-      font-size: 12px;
+      padding: 3px 5px;
+      font-size: 11px;
       text-align: center;
     }
-    .task-delay-input:focus {
-      outline: none;
-      border-color: #a8d8ea;
-    }
+    .task-delay-input:focus { outline: none; border-color: #a8d8ea; }
   </style>
 </head>
 <body>
-  <h1>Seedance 2.0 批量生成</h1>
+  <div class="header">
+    <h1>Seedance 2.0 批量生成</h1>
+    <button class="btn-collapse" id="btnCollapse" title="收起面板">✕</button>
+  </div>
 
   <div class="section">
-    <div class="section-title">预设参数 <span id="presetEditToggle" style="float:right;cursor:pointer;font-size:11px;color:#a8d8ea;">✏️ 编辑</span></div>
+    <div class="section-title">预设参数 <span id="presetEditToggle" style="float:right;cursor:pointer;font-size:10px;color:#a8d8ea;">✏️ 编辑</span></div>
     <div class="preset-info" id="presetDisplay">
       <div class="preset-tag" id="tagModel">🤖 Seedance 2.0</div>
       <div class="preset-tag" id="tagRefMode">⚡ 首尾帧</div>
@@ -304,8 +298,8 @@
       <div class="preset-tag" id="tagDuration">⏱️ 5s</div>
     </div>
     <div id="presetEditor" style="display:none;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-        <label style="font-size:11px;color:#8b8fa3;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+        <label style="font-size:10px;color:#8b8fa3;">
           模型
           <select id="cfgModel" class="cfg-select">
             <option value="Seedance 2.0">Seedance 2.0</option>
@@ -316,7 +310,7 @@
             <option value="视频 3.0">视频 3.0</option>
           </select>
         </label>
-        <label style="font-size:11px;color:#8b8fa3;">
+        <label style="font-size:10px;color:#8b8fa3;">
           参考模式
           <select id="cfgRefMode" class="cfg-select">
             <option value="全能参考">全能参考</option>
@@ -325,7 +319,7 @@
             <option value="主体参考">主体参考</option>
           </select>
         </label>
-        <label style="font-size:11px;color:#8b8fa3;">
+        <label style="font-size:10px;color:#8b8fa3;">
           画面比例
           <select id="cfgRatio" class="cfg-select">
             <option value="16:9">16:9</option>
@@ -336,7 +330,7 @@
             <option value="21:9">21:9</option>
           </select>
         </label>
-        <label style="font-size:11px;color:#8b8fa3;">
+        <label style="font-size:10px;color:#8b8fa3;">
           视频时长
           <select id="cfgDuration" class="cfg-select">
             <option value="5s">5s</option>
@@ -354,22 +348,22 @@
           </select>
         </label>
       </div>
-      <div style="display:flex;gap:6px;margin-top:6px;">
+      <div style="display:flex;gap:5px;margin-top:5px;">
         <button class="btn-sm" id="presetSave" style="flex:1;">💾 保存</button>
         <button class="btn-sm btn-sm-cancel" id="presetCancel" style="flex:1;">取消</button>
       </div>
     </div>
   </div>
 
-  <div style="display:flex;gap:6px;margin-bottom:12px;">
+  <div style="display:flex;gap:5px;margin-bottom:10px;">
     <button class="btn btn-preset" id="btnPreset" style="flex:1;margin-bottom:0;">🔧 应用预设参数</button>
-    <button class="btn btn-preset" id="btnCheckPage" style="flex:0 0 auto;margin-bottom:0;padding:10px 14px;" title="检查页面连接">🔗</button>
+    <button class="btn btn-preset" id="btnCheckPage" style="flex:0 0 auto;margin-bottom:0;padding:8px 12px;" title="检查页面连接">🔗</button>
   </div>
 
   <div class="conn-status" id="connStatus"></div>
 
   <div class="prompt-section">
-    <div class="section-title" style="margin-bottom: 6px;">提示词（可选）</div>
+    <div class="section-title" style="margin-bottom: 4px;">提示词（可选）</div>
     <textarea class="prompt-input" id="promptInput" placeholder="输入生成提示词，所有任务共用此提示词..."></textarea>
   </div>
 
@@ -381,10 +375,10 @@
 
   <div class="upload-area" id="uploadArea">
     <div class="icon">📁</div>
-    <div class="text">点击或拖拽添加参考图</div>
-    <div class="hint">支持 JPG / PNG / WEBP，最多30张</div>
+    <div class="text">点击或拖拽添加参考图/视频</div>
+    <div class="hint">支持 JPG/PNG/WEBP/MP4/MOV，最多30个</div>
   </div>
-  <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp">
+  <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp,image/bmp,video/mp4,video/quicktime">
 
   <div class="status-bar" id="statusBar" style="display:none;">
     <span class="count" id="fileCount">0 / 30 张</span>
@@ -393,7 +387,7 @@
 
   <div class="file-list" id="fileList"></div>
 
-  <button class="btn btn-primary" id="btnGenerate" disabled>🚀 开始批量生成（0 个任务）</button>
+  <button class="btn btn-primary" id="btnDoGenerate" title="上传参考图并填写提示词（支持@引用）">📤 上传并填写</button>
 
   <div class="progress" id="progress">
     <div class="progress-bar">
@@ -404,6 +398,6 @@
 
   <div class="log" id="log"></div>
 
-  <script src="popup.js"></script>
+  <script src="panel.js"></script>
 </body>
 </html>

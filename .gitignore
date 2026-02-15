@@ -1,5 +1,9 @@
 node_modules/
 playwright/user-data/
 playwright/ext-test-user-data/
+playwright/chrome-dev-profile/
+playwright/tmp-test-files/
 playwright/screenshots/
+playwright/test-upload.png
+playwright/test-output.txt
 images/test-*.png

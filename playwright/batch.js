@@ -159,22 +159,80 @@ const SELECTORS = {
 // 切换到视频生成模式
 // ============================================================
 async function switchToVideoGeneration(page) {
+  // 先关闭可能的弹窗
+  await page.keyboard.press('Escape').catch(() => {});
+  await sleep(1000);
+
+  // 检查工具栏是否存在
+  let toolbar = page.locator(SELECTORS.toolbarContent).first();
+  let toolbarVisible = await toolbar.isVisible().catch(() => false);
+
+  if (!toolbarVisible) {
+    // 可能在首页，尝试点击侧边栏 "生成"
+    console.log('  未检测到工具栏，尝试点击侧边栏"生成"...');
+    try {
+      await page.getByText('生成', { exact: true }).first().click({ timeout: 3000 });
+      await sleep(2000);
+    } catch (e) {
+      console.warn('  侧边栏"生成"点击失败:', e.message.substring(0, 80));
+    }
+  }
+
+  // 再次检查工具栏
+  toolbar = page.locator(SELECTORS.toolbarContent).first();
+  toolbarVisible = await toolbar.isVisible().catch(() => false);
+
+  if (toolbarVisible) {
+    // 检查当前类型
+    const selects = toolbar.locator(SELECTORS.lvSelect);
+    const selectCount = await selects.count();
+    if (selectCount > 0) {
+      const currentType = await selects.first().textContent();
+      if (currentType && currentType.trim() === '视频生成') {
+        console.log('  ✅ 已在视频生成模式');
+        return;
+      }
+
+      // 点击类型选择器切换
+      console.log(`  当前类型: "${currentType?.trim()}", 切换到视频生成...`);
+      await selects.first().click();
+      await sleep(500);
+
+      const videoOption = page.locator(SELECTORS.lvOption).filter({ hasText: '视频生成' }).first();
+      if (await videoOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await videoOption.click();
+        console.log('  ✅ 已切换到视频生成模式');
+        await sleep(2000);
+        return;
+      }
+    }
+  }
+
+  // 备用: 使用页面顶部类型选择器
   try {
     const typeSelector = page.locator(SELECTORS.typeSelector).first();
-    if (await typeSelector.isVisible()) {
+    if (await typeSelector.isVisible({ timeout: 3000 }).catch(() => false)) {
       await typeSelector.click();
       await sleep(500);
+      const videoOption = page.locator('[class*="home-type-select-option"]').filter({ hasText: '视频生成' }).first();
+      if (await videoOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await videoOption.click();
+        console.log('  ✅ 已通过页面选择器切换到视频生成模式');
+        await sleep(2000);
+        return;
+      }
     }
-    const videoOption = page.locator(SELECTORS.typeOption).filter({ hasText: '视频生成' }).first();
-    if (await videoOption.isVisible()) {
-      await videoOption.click();
-      console.log('  ✅ 已切换到视频生成模式');
-    } else {
-      await clickByText(page, '视频生成', { timeout: 3000 });
-    }
-    await sleep(800);
   } catch (e) {
-    console.warn(`  ⚠️ 切换视频生成模式: ${e.message}`);
+    console.warn(`  ⚠️ 页面选择器切换失败: ${e.message.substring(0, 80)}`);
+  }
+
+  // 最后尝试: 点击文本
+  try {
+    await clickByText(page, '视频生成', { timeout: 3000 });
+    console.log('  ✅ 已通过文本点击切换到视频生成模式');
+    await sleep(2000);
+  } catch (e) {
+    console.warn(`  ⚠️ 切换视频生成模式失败: ${e.message.substring(0, 80)}`);
   }
 }
 
@@ -184,19 +242,36 @@ async function switchToVideoGeneration(page) {
 // ============================================================
 async function applyPreset(page) {
   const { preset } = config;
-  const toolbar = page.locator(SELECTORS.toolbarContent).first();
-  const toolbarVisible = await toolbar.isVisible().catch(() => false);
 
-  if (!toolbarVisible) {
-    console.warn('  ⚠️ 未找到工具栏，跳过预设参数');
-    return;
+  // 查找非折叠的工具栏
+  const allToolbars = page.locator(SELECTORS.toolbarContent);
+  const count = await allToolbars.count();
+  let toolbar = null;
+
+  for (let i = 0; i < count; i++) {
+    const tb = allToolbars.nth(i);
+    const cls = await tb.getAttribute('class').catch(() => '');
+    if (cls && !cls.includes('collapsed') && await tb.isVisible().catch(() => false)) {
+      toolbar = tb;
+      break;
+    }
+  }
+
+  if (!toolbar) {
+    toolbar = page.locator(SELECTORS.toolbarContent).first();
+    const toolbarVisible = await toolbar.isVisible().catch(() => false);
+    if (!toolbarVisible) {
+      console.warn('  ⚠️ 未找到工具栏，跳过预设参数');
+      return;
+    }
   }
 
   const selects = toolbar.locator(SELECTORS.lvSelect);
   const selectCount = await selects.count();
   console.log(`  工具栏中找到 ${selectCount} 个下拉选择器`);
+  // 结构: [0]=创作类型(视频生成), [1]=模型, [2]=参考模式, [3]=时长
+  // [button]=画面比例
 
-  // [0]=类型(视频生成), [1]=模型, [2]=参考模式, [3]=时长
   if (selectCount > 1) {
     await selectDropdownOption(page, selects.nth(1), preset.model, '模型');
   }

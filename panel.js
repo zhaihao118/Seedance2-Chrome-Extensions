@@ -1,4 +1,5 @@
-// popup.js - 批量生成控制面板
+// panel.js - 批量生成控制面板 (侧边抽屉版)
+// 运行在 chrome-extension:// iframe 中，拥有完整的扩展 API 权限
 (function () {
   const MAX_FILES = 30;
   let selectedFiles = [];
@@ -12,9 +13,9 @@
   const statusBar = document.getElementById('statusBar');
   const fileCount = document.getElementById('fileCount');
   const btnClear = document.getElementById('btnClear');
-  const btnGenerate = document.getElementById('btnGenerate');
   const btnPreset = document.getElementById('btnPreset');
   const btnCheckPage = document.getElementById('btnCheckPage');
+  const btnCollapse = document.getElementById('btnCollapse');
   const progressEl = document.getElementById('progress');
   const progressFill = document.getElementById('progressFill');
   const progressText = document.getElementById('progressText');
@@ -22,6 +23,7 @@
   const promptInput = document.getElementById('promptInput');
   const connStatus = document.getElementById('connStatus');
   const taskDelayInput = document.getElementById('taskDelay');
+  const btnDoGenerate = document.getElementById('btnDoGenerate');
 
   // 预设编辑器
   const presetEditToggle = document.getElementById('presetEditToggle');
@@ -51,6 +53,18 @@
   };
 
   let currentPreset = { ...DEFAULT_PRESET };
+
+  // ============================================================
+  // Helper: 获取即梦AI标签页
+  // ============================================================
+  async function getJimengTab() {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (!tab) return null;
+    // 安全检查 url (需要 tabs 权限)
+    if (tab.url && !tab.url.includes('jimeng.jianying.com')) return null;
+    return tab;
+  }
 
   // ============================================================
   // 初始化 - 从 storage 加载设置
@@ -98,6 +112,14 @@
   }
 
   // ============================================================
+  // 收起按钮 → 通知 content script 关闭抽屉
+  // ============================================================
+  btnCollapse.addEventListener('click', () => {
+    // 通过 postMessage 通知父页面 (content script) 关闭抽屉
+    window.parent.postMessage({ type: 'SEEDANCE_DRAWER_TOGGLE', open: false }, '*');
+  });
+
+  // ============================================================
   // 预设编辑器
   // ============================================================
   presetEditToggle.addEventListener('click', () => {
@@ -136,8 +158,8 @@
   // ============================================================
   async function checkConnection() {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab || !tab.url?.includes('jimeng.jianying.com')) {
+      const tab = await getJimengTab();
+      if (!tab) {
         showConnStatus('请打开即梦AI页面', false);
         return false;
       }
@@ -148,7 +170,7 @@
         return true;
       }
     } catch (e) {
-      showConnStatus('❌ 未连接 - 请打开即梦AI生成页面并刷新', false);
+      showConnStatus('❌ 未连接 - 请刷新即梦AI页面', false);
     }
     return false;
   }
@@ -166,7 +188,7 @@
     btnCheckPage.disabled = false;
   });
 
-  // Popup 打开时自动检查连接
+  // 面板打开时自动检查连接
   checkConnection();
 
   // ============================================================
@@ -193,11 +215,15 @@
   });
 
   function handleFiles(files) {
-    const imageFiles = Array.from(files).filter(f =>
-      ['image/jpeg', 'image/png', 'image/webp'].includes(f.type)
+    const ALLOWED_TYPES = [
+      'image/jpeg', 'image/png', 'image/webp', 'image/bmp',
+      'video/mp4', 'video/quicktime',
+    ];
+    const mediaFiles = Array.from(files).filter(f =>
+      ALLOWED_TYPES.includes(f.type)
     );
     const remaining = MAX_FILES - selectedFiles.length;
-    const toAdd = imageFiles.slice(0, remaining);
+    const toAdd = mediaFiles.slice(0, remaining);
     selectedFiles = selectedFiles.concat(toAdd);
     updateUI();
   }
@@ -209,11 +235,15 @@
     fileCount.textContent = `${count} / ${MAX_FILES} 张`;
 
     fileList.innerHTML = '';
+    // 统计图片/视频序号
+    let imgN = 0, vidN = 0;
     selectedFiles.forEach((file, idx) => {
+      const isVideo = file.type.startsWith('video/');
+      const label = isVideo ? `视频${++vidN}` : `图片${++imgN}`;
       const item = document.createElement('div');
       item.className = 'file-item';
       item.innerHTML = `
-        <span class="name">${idx + 1}. ${file.name}</span>
+        <span class="name">${idx + 1}. [${label}] ${file.name}</span>
         <span class="remove" data-idx="${idx}">✕</span>
       `;
       fileList.appendChild(item);
@@ -227,8 +257,8 @@
       });
     });
 
-    btnGenerate.disabled = count === 0;
-    btnGenerate.textContent = `🚀 开始批量生成（${count} 个任务）`;
+    btnDoGenerate.disabled = count === 0;
+    btnDoGenerate.textContent = count > 0 ? `📤 上传并填写（${count}张）` : '📤 上传并填写';
   }
 
   // ============================================================
@@ -243,8 +273,8 @@
   // 应用预设参数
   // ============================================================
   btnPreset.addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !tab.url?.includes('jimeng.jianying.com')) {
+    const tab = await getJimengTab();
+    if (!tab) {
       alert('请先打开即梦AI生成页面');
       return;
     }
@@ -253,7 +283,6 @@
     btnPreset.disabled = true;
 
     try {
-      // 通过 content script 的 applyPreset action 来应用
       const response = await chrome.tabs.sendMessage(tab.id, {
         action: 'applyPreset',
         preset: currentPreset,
@@ -297,108 +326,7 @@
     });
   }
 
-  // ============================================================
-  // 开始批量生成
-  // ============================================================
-  btnGenerate.addEventListener('click', async () => {
-    if (selectedFiles.length === 0) return;
 
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !tab.url?.includes('jimeng.jianying.com')) {
-      alert('请先打开即梦AI生成页面');
-      return;
-    }
-
-    // 先检查连接
-    try {
-      const pingResp = await chrome.tabs.sendMessage(tab.id, { action: 'ping' });
-      if (!pingResp || !pingResp.ready) {
-        alert('内容脚本未就绪，请刷新即梦AI页面后重试');
-        return;
-      }
-    } catch (e) {
-      alert('无法连接到即梦AI页面，请确认页面已打开并刷新');
-      return;
-    }
-
-    btnGenerate.disabled = true;
-    progressEl.classList.add('active');
-    logEl.classList.add('active');
-    logEl.innerHTML = '';
-
-    const total = selectedFiles.length;
-    const prompt = promptInput.value.trim();
-    const taskDelay = (parseInt(taskDelayInput.value) || 2) * 1000;
-
-    addLog(`开始批量生成 ${total} 个任务...`);
-    addLog(`提示词: ${prompt || '(无)'}`);
-    addLog(`任务间隔: ${taskDelay / 1000}s`);
-
-    // 读取所有图片为 base64
-    const filesData = [];
-    for (let i = 0; i < total; i++) {
-      progressText.textContent = `读取图片 ${i + 1}/${total}...`;
-      progressFill.style.width = `${((i + 1) / total) * 30}%`;
-      try {
-        const base64 = await fileToBase64(selectedFiles[i]);
-        filesData.push({
-          name: selectedFiles[i].name,
-          data: base64,
-          type: selectedFiles[i].type,
-        });
-      } catch (err) {
-        addLog(`读取失败: ${selectedFiles[i].name}`, 'error');
-      }
-    }
-
-    // 逐个发送生成任务
-    let successCount = 0;
-    let failCount = 0;
-
-    for (let i = 0; i < filesData.length; i++) {
-      const file = filesData[i];
-      progressText.textContent = `生成任务 ${i + 1}/${filesData.length}...`;
-      progressFill.style.width = `${30 + ((i + 1) / filesData.length) * 70}%`;
-
-      try {
-        const response = await chrome.tabs.sendMessage(tab.id, {
-          action: 'generateTask',
-          fileData: file,
-          prompt: prompt,
-          index: i,
-          total: filesData.length,
-        });
-
-        if (response && response.success) {
-          addLog(`✅ 任务 ${i + 1}: ${file.name}`, 'success');
-          successCount++;
-        } else {
-          const errMsg = response?.error || '未知错误';
-          addLog(`❌ 任务 ${i + 1} 失败: ${errMsg}`, 'error');
-          failCount++;
-        }
-
-        // 任务间隔
-        if (i < filesData.length - 1) {
-          addLog(`⏳ 等待 ${taskDelay / 1000}s...`);
-          await sleep(taskDelay);
-        }
-      } catch (err) {
-        addLog(`❌ 任务 ${i + 1} 失败: ${err.message}`, 'error');
-        failCount++;
-      }
-    }
-
-    progressText.textContent = `完成! 成功 ${successCount}, 失败 ${failCount}, 共 ${filesData.length} 个任务`;
-    progressFill.style.width = '100%';
-    addLog(`批量完成! 成功: ${successCount}, 失败: ${failCount}`, 'success');
-
-    setTimeout(() => {
-      btnGenerate.disabled = false;
-    }, 3000);
-
-    saveSettings();
-  });
 
   // ============================================================
   // 辅助函数
@@ -414,6 +342,97 @@
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
+
+  // ============================================================
+  // 上传并填写 (doGenerate): 上传参考图 + 填写提示词(@mention)
+  // ============================================================
+  btnDoGenerate.addEventListener('click', async () => {
+    if (selectedFiles.length === 0) {
+      alert('请先添加参考图');
+      return;
+    }
+
+    const tab = await getJimengTab();
+    if (!tab) {
+      alert('请先打开即梦AI生成页面');
+      return;
+    }
+
+    // 检查连接
+    try {
+      const pingResp = await chrome.tabs.sendMessage(tab.id, { action: 'ping' });
+      if (!pingResp || !pingResp.ready) {
+        alert('内容脚本未就绪，请刷新即梦AI页面后重试');
+        return;
+      }
+    } catch (e) {
+      alert('无法连接到即梦AI页面，请确认页面已打开并刷新');
+      return;
+    }
+
+    btnDoGenerate.disabled = true;
+    btnDoGenerate.textContent = '⏳ 执行中...';
+    progressEl.classList.add('active');
+    logEl.classList.add('active');
+    logEl.innerHTML = '';
+
+    const prompt = promptInput.value.trim();
+    const total = selectedFiles.length;
+    addLog(`准备上传 ${total} 个文件并填写提示词`);
+    addLog(`提示词: ${prompt || '(无)'}`);
+
+    // 将所有文件转为 base64 数据
+    progressText.textContent = `正在读取 ${total} 张图片...`;
+    progressFill.style.width = '10%';
+    const filesData = [];
+    for (let i = 0; i < total; i++) {
+      const file = selectedFiles[i];
+      try {
+        const base64 = await fileToBase64(file);
+        filesData.push({ name: file.name, data: base64, type: file.type });
+        addLog(`📎 已读取 ${i + 1}/${total}: ${file.name}`);
+      } catch (err) {
+        addLog(`❌ 读取失败: ${file.name} - ${err.message}`, 'error');
+      }
+    }
+
+    if (filesData.length === 0) {
+      addLog('❌ 没有可用的图片数据', 'error');
+      btnDoGenerate.textContent = `📤 上传并填写（${total}张）`;
+      btnDoGenerate.disabled = false;
+      return;
+    }
+
+    progressText.textContent = `正在上传 ${filesData.length} 张图片...`;
+    progressFill.style.width = '30%';
+    addLog(`📤 开始执行: 清除旧图 → 上传 ${filesData.length} 张 → 填写提示词`);
+
+    try {
+      // 一次性发送所有文件数据给 content.js
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: 'doGenerate',
+        files: filesData,
+        prompt: prompt,
+      });
+
+      progressFill.style.width = '100%';
+      if (response && response.success) {
+        progressText.textContent = `完成! ${filesData.length} 张图片已上传`;
+        addLog(`✅ 全部完成: ${filesData.length} 张图片已上传, 提示词已填写`, 'success');
+      } else {
+        progressText.textContent = `失败: ${response?.error || '未知错误'}`;
+        addLog(`❌ 执行失败: ${response?.error || '未知错误'}`, 'error');
+      }
+    } catch (err) {
+      progressFill.style.width = '100%';
+      progressText.textContent = `异常: ${err.message}`;
+      addLog(`❌ 执行异常: ${err.message}`, 'error');
+    }
+
+    btnDoGenerate.textContent = `📤 上传并填写（${total}张）`;
+    btnDoGenerate.disabled = false;
+    saveSettings();
+  });
 
   // ============================================================
   // 直接注入页面执行预设参数 (备用方案)
@@ -485,7 +504,6 @@
       }
 
       const selects = toolbar.querySelectorAll('.lv-select');
-      // [0]=类型, [1]=模型, [2]=参考模式, [3]=时长
 
       if (preset.model && selects[1]) {
         await selectOption(selects[1], preset.model);
