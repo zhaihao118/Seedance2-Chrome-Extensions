@@ -1,5 +1,5 @@
 // background.js - Service Worker (MV3)
-// 处理扩展生命周期事件和消息中继
+// 处理扩展生命周期事件、消息中继、任务轮询
 
 chrome.runtime.onInstalled.addListener((details) => {
   console.log('[Seedance批量助手] 扩展已安装', details.reason);
@@ -15,6 +15,9 @@ chrome.runtime.onInstalled.addListener((details) => {
           duration: '5s',
         },
         taskDelay: 2,
+        apiBaseUrl: 'http://localhost:3456',
+        pollInterval: 30,
+        taskQueue: [],
       });
     }
   });
@@ -75,4 +78,107 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     sendResponse({ received: true });
   }
+
+  // ===== 任务队列相关消息 =====
+
+  // 从 panel.js 触发: 拉取远程任务
+  if (msg.action === 'fetchTasks') {
+    fetchRemoteTasks(msg.apiBaseUrl)
+      .then(result => sendResponse(result))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true; // async
+  }
+
+  // 更新远程任务状态
+  if (msg.action === 'reportTaskStatus') {
+    reportTaskStatusToAPI(msg.apiBaseUrl, msg.taskCode, msg.status, msg.error)
+      .then(result => sendResponse(result))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  // 确认接收任务
+  if (msg.action === 'ackTasks') {
+    ackTasksToAPI(msg.apiBaseUrl, msg.taskCodes)
+      .then(result => sendResponse(result))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
 });
+
+// ============================================================
+// 任务 API 通信
+// ============================================================
+
+/**
+ * 从远程 API 拉取待处理任务
+ */
+async function fetchRemoteTasks(apiBaseUrl) {
+  try {
+    const url = `${apiBaseUrl}/api/tasks/pending`;
+    console.log(`[Seedance BG] 拉取任务: ${url}`);
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    console.log(`[Seedance BG] 获取到 ${data.total || 0} 个待处理任务`);
+
+    // 更新 badge
+    if (data.total > 0) {
+      chrome.action.setBadgeText({ text: String(data.total) });
+      chrome.action.setBadgeBackgroundColor({ color: '#f0ad4e' });
+    }
+
+    return { success: true, tasks: data.tasks || [], total: data.total || 0 };
+  } catch (err) {
+    console.error('[Seedance BG] 拉取任务失败:', err.message);
+    return { success: false, error: err.message, tasks: [] };
+  }
+}
+
+/**
+ * 向 API 报告任务状态
+ */
+async function reportTaskStatusToAPI(apiBaseUrl, taskCode, status, error) {
+  try {
+    const url = `${apiBaseUrl}/api/tasks/status`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        taskCode,
+        status,
+        error: error || null,
+        completedAt: status === 'completed' || status === 'failed' ? new Date().toISOString() : null,
+      }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    return { success: true, data };
+  } catch (err) {
+    console.error(`[Seedance BG] 报告任务状态失败 (${taskCode}):`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * 确认接收任务
+ */
+async function ackTasksToAPI(apiBaseUrl, taskCodes) {
+  try {
+    const url = `${apiBaseUrl}/api/tasks/ack`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskCodes }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    return { success: true, data };
+  } catch (err) {
+    console.error('[Seedance BG] 确认任务失败:', err.message);
+    return { success: false, error: err.message };
+  }
+}

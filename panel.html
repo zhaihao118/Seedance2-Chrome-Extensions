@@ -13,18 +13,17 @@
       background: #1a1a2e;
       color: #e0e0e0;
     }
-    body {
-      padding: 14px;
-    }
+    body { padding: 14px; }
     body::-webkit-scrollbar { width: 5px; }
     body::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
     body::-webkit-scrollbar-track { background: transparent; }
 
+    /* ===== Header ===== */
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .header h1 {
       font-size: 15px;
@@ -46,6 +45,89 @@
     }
     .btn-collapse:hover { color: #fff; background: rgba(255,255,255,0.1); }
 
+    /* ===== Global Stats ===== */
+    .global-stats {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 10px;
+      padding: 6px 8px;
+      background: #16213e;
+      border-radius: 8px;
+    }
+    .task-stat {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      flex: 1;
+      justify-content: center;
+    }
+    .task-stat .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .task-stat .num { font-weight: 700; font-size: 13px; }
+    .dot-pending { background: #f0ad4e; }
+    .dot-running { background: #5bc0de; animation: pulse 1s infinite; }
+    .dot-generating { background: #f0ad4e; animation: pulse 1.5s infinite; }
+    .dot-upscaling { background: #e67e22; animation: pulse 1.5s infinite; }
+    .dot-completed { background: #4caf50; }
+    .dot-failed { background: #e94560; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ===== Tabs ===== */
+    .tab-bar {
+      display: flex;
+      gap: 2px;
+      margin-bottom: 10px;
+      background: #0f3460;
+      border-radius: 8px;
+      padding: 3px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 7px 4px;
+      border: none;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      background: transparent;
+      color: #8b8fa3;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: #a8d8ea; }
+    .tab-btn.active {
+      background: #16213e;
+      color: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .tab-badge {
+      display: inline-block;
+      min-width: 16px;
+      height: 16px;
+      line-height: 16px;
+      text-align: center;
+      border-radius: 8px;
+      font-size: 9px;
+      font-weight: 700;
+      margin-left: 3px;
+      vertical-align: middle;
+      background: #e94560;
+      color: #fff;
+    }
+    .tab-badge:empty { display: none; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ===== Common ===== */
     .section {
       background: #16213e;
       border-radius: 8px;
@@ -57,6 +139,209 @@
       color: #8b8fa3;
       margin-bottom: 6px;
     }
+    .conn-status {
+      font-size: 10px;
+      text-align: center;
+      padding: 3px;
+      border-radius: 4px;
+      margin-bottom: 6px;
+      display: none;
+    }
+    .conn-status.connected {
+      display: block;
+      background: rgba(76, 175, 80, 0.15);
+      color: #4caf50;
+    }
+    .conn-status.disconnected {
+      display: block;
+      background: rgba(233, 69, 96, 0.15);
+      color: #e94560;
+    }
+    .btn {
+      width: 100%;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary {
+      background: linear-gradient(135deg, #e94560, #c23152);
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) { opacity: 0.9; }
+    .btn-preset {
+      background: linear-gradient(135deg, #0f3460, #16213e);
+      color: #a8d8ea;
+      border: 1px solid #0f3460;
+    }
+    .btn-preset:hover:not(:disabled) { border-color: #a8d8ea; }
+    .btn-danger {
+      background: linear-gradient(135deg, #e74c3c, #c0392b);
+      color: #fff;
+    }
+    .btn-danger:hover:not(:disabled) { opacity: 0.9; }
+    .action-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .action-row .btn { flex: 1; }
+    .action-bar {
+      display: flex;
+      gap: 6px;
+      padding: 10px 0 0;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      margin-top: 8px;
+    }
+    .action-bar .btn {
+      flex: 1;
+      padding: 10px 8px;
+      font-size: 13px;
+    }
+    .btn-sm {
+      padding: 3px 7px;
+      border: none;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+      background: #e94560;
+      color: #fff;
+    }
+    .btn-sm:hover { opacity: 0.9; }
+    .btn-sm-cancel { background: #0f3460; color: #a8d8ea; }
+    .cfg-select {
+      width: 100%;
+      background: #0f3460;
+      color: #a8d8ea;
+      border: 1px solid #16213e;
+      border-radius: 4px;
+      padding: 3px 5px;
+      font-size: 11px;
+      margin-top: 2px;
+      cursor: pointer;
+    }
+    .cfg-select:focus { outline: none; border-color: #a8d8ea; }
+
+    /* ===== Tab 1: 接收任务 ===== */
+    .api-config-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 8px;
+      font-size: 10px;
+      color: #8b8fa3;
+    }
+    .api-url-input {
+      flex: 1;
+      background: #0f3460;
+      border: 1px solid #16213e;
+      border-radius: 4px;
+      color: #e0e0e0;
+      padding: 4px 6px;
+      font-size: 10px;
+    }
+    .api-url-input:focus { outline: none; border-color: #a8d8ea; }
+    .sse-toggle-btn {
+      font-size: 9px;
+      padding: 3px 6px;
+      border: 1px solid #0f3460;
+      border-radius: 4px;
+      background: #16213e;
+      color: #8b8fa3;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .sse-toggle-btn.active {
+      background: #e94560;
+      border-color: #e94560;
+      color: #fff;
+    }
+    .sse-info-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 8px;
+      font-size: 10px;
+      color: #8b8fa3;
+    }
+    .sse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #555;
+      display: inline-block;
+    }
+    .recv-controls {
+      display: flex;
+      gap: 5px;
+      margin-top: 8px;
+    }
+    .recv-controls button {
+      flex: 1;
+      padding: 7px 4px;
+      border: none;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .recv-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-fetch {
+      background: #0f3460;
+      color: #a8d8ea;
+      border: 1px solid #0f3460;
+    }
+    .btn-fetch:hover { border-color: #a8d8ea; }
+    .btn-auto {
+      background: linear-gradient(135deg, #e94560, #c23152);
+      color: #fff;
+    }
+    .btn-auto:hover { opacity: 0.9; }
+    .btn-auto.running, .btn-auto.active {
+      background: linear-gradient(135deg, #f0ad4e, #e89b2e);
+    }
+    .task-delay-section {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      font-size: 11px;
+      color: #8b8fa3;
+    }
+    .task-delay-input {
+      width: 50px;
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 4px;
+      color: #e0e0e0;
+      padding: 3px 5px;
+      font-size: 11px;
+      text-align: center;
+    }
+    .task-delay-input:focus { outline: none; border-color: #a8d8ea; }
+    .recv-log {
+      margin-top: 6px;
+      max-height: 120px;
+      overflow-y: auto;
+      font-size: 10px;
+      color: #8b8fa3;
+      background: #111;
+      border-radius: 4px;
+      padding: 5px;
+    }
+    .recv-log::-webkit-scrollbar { width: 3px; }
+    .recv-log::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 2px; }
+    .recv-log p { margin-bottom: 2px; }
+    .recv-log .success { color: #4caf50; }
+    .recv-log .error { color: #e94560; }
+
+    /* ===== Tab 2: 手动提交 ===== */
     .preset-info {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -72,7 +357,6 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-
     .upload-area {
       border: 2px dashed #0f3460;
       border-radius: 8px;
@@ -90,7 +374,6 @@
     .upload-area .text { font-size: 12px; color: #8b8fa3; }
     .upload-area .hint { font-size: 10px; color: #555; margin-top: 2px; }
     #fileInput { display: none; }
-
     .file-list {
       max-height: 120px;
       overflow-y: auto;
@@ -121,7 +404,6 @@
       font-size: 13px;
       flex-shrink: 0;
     }
-
     .status-bar {
       display: flex;
       align-items: center;
@@ -136,31 +418,117 @@
       background: none;
       border: none;
     }
-
-    .btn {
-      width: 100%;
-      padding: 8px;
-      border: none;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
+    .quick-insert-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 8px;
     }
-    .btn-primary {
-      background: linear-gradient(135deg, #e94560, #c23152);
-      color: #fff;
-    }
-    .btn-primary:hover { opacity: 0.9; }
-    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-preset {
-      background: linear-gradient(135deg, #0f3460, #16213e);
+    .quick-insert-row:empty { display: none; }
+    .qi-tag {
+      font-size: 10px;
+      padding: 2px 7px;
+      background: #0f3460;
       color: #a8d8ea;
-      margin-bottom: 6px;
-      border: 1px solid #0f3460;
+      border: 1px solid #1a3a6a;
+      border-radius: 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
     }
-    .btn-preset:hover { border-color: #a8d8ea; }
-
+    .qi-tag:hover {
+      background: #e94560;
+      color: #fff;
+      border-color: #e94560;
+    }
+    .file-item .insert-tag {
+      color: #a8d8ea;
+      cursor: pointer;
+      font-size: 11px;
+      flex-shrink: 0;
+      margin-right: 4px;
+      opacity: 0.6;
+      transition: opacity 0.15s;
+    }
+    .file-item .insert-tag:hover {
+      opacity: 1;
+      color: #e94560;
+    }
+    .file-item .preview-btn {
+      color: #a8d8ea;
+      cursor: pointer;
+      font-size: 11px;
+      flex-shrink: 0;
+      margin-right: 4px;
+      opacity: 0.6;
+      transition: opacity 0.15s;
+    }
+    .file-item .preview-btn:hover {
+      opacity: 1;
+      color: #4fc3f7;
+    }
+    /* -- 文件预览弹窗 -- */
+    .file-preview-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 99999;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .file-preview-overlay.show {
+      display: flex;
+    }
+    .file-preview-overlay img,
+    .file-preview-overlay video {
+      max-width: 90%;
+      max-height: 85%;
+      border-radius: 8px;
+      box-shadow: 0 4px 30px rgba(0,0,0,0.6);
+      object-fit: contain;
+    }
+    .file-preview-overlay .preview-close {
+      position: absolute;
+      top: 10px; right: 14px;
+      font-size: 22px;
+      color: #fff;
+      cursor: pointer;
+      opacity: 0.8;
+      z-index: 1;
+    }
+    .file-preview-overlay .preview-close:hover { opacity: 1; }
+    .file-preview-overlay .preview-filename {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: #ccc;
+      background: rgba(0,0,0,0.5);
+      padding: 3px 12px;
+      border-radius: 10px;
+      white-space: nowrap;
+      max-width: 80%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .prompt-section { margin-bottom: 10px; }
+    .prompt-input {
+      width: 100%;
+      height: 50px;
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      color: #e0e0e0;
+      padding: 6px 8px;
+      font-size: 11px;
+      resize: vertical;
+      font-family: inherit;
+    }
+    .prompt-input::placeholder { color: #555; }
+    .prompt-input:focus { outline: none; border-color: #a8d8ea; }
     .progress {
       margin-top: 10px;
       display: none;
@@ -185,7 +553,6 @@
       color: #8b8fa3;
       text-align: center;
     }
-
     .log {
       margin-top: 6px;
       max-height: 80px;
@@ -202,201 +569,363 @@
     .log .success { color: #4caf50; }
     .log .error { color: #e94560; }
 
-    .prompt-section { margin-bottom: 10px; }
-    .prompt-input {
-      width: 100%;
-      height: 50px;
+    /* ===== Tab 3: 任务列表 ===== */
+    .task-list-controls {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .task-list-controls button {
+      font-size: 10px;
+      padding: 4px 8px;
+      border: 1px solid #0f3460;
+      border-radius: 4px;
+      background: #16213e;
+      color: #a8d8ea;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .task-list-controls button:hover {
+      border-color: #a8d8ea;
+      background: #0f3460;
+    }
+    .task-list {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    .task-list::-webkit-scrollbar { width: 3px; }
+    .task-list::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 2px; }
+    .task-list:empty::after {
+      content: '暂无任务';
+      display: block;
+      text-align: center;
+      padding: 20px 8px;
+      font-size: 11px;
+      color: #555;
+    }
+    .task-card {
       background: #16213e;
       border: 1px solid #0f3460;
       border-radius: 6px;
-      color: #e0e0e0;
-      padding: 6px 8px;
-      font-size: 11px;
-      resize: vertical;
-      font-family: inherit;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      transition: all 0.2s;
     }
-    .prompt-input::placeholder { color: #555; }
-    .prompt-input:focus { outline: none; border-color: #a8d8ea; }
-
-    .cfg-select {
-      width: 100%;
-      background: #0f3460;
+    .task-card:hover { border-color: #a8d8ea; }
+    .task-card.status-running,
+    .task-card.status-configuring {
+      border-color: #5bc0de;
+      box-shadow: 0 0 6px rgba(91, 192, 222, 0.2);
+    }
+    .task-card.status-generating {
+      border-color: #f0ad4e;
+      box-shadow: 0 0 6px rgba(240, 173, 78, 0.2);
+    }
+    .task-card.status-uploading,
+    .task-card.status-uploading_hd {
+      border-color: #9b59b6;
+      box-shadow: 0 0 6px rgba(155, 89, 182, 0.2);
+    }
+    .task-card.status-upscaling {
+      border-color: #e67e22;
+      box-shadow: 0 0 6px rgba(230, 126, 34, 0.2);
+    }
+    .task-card.status-completed {
+      opacity: 0.6;
+      border-color: #4caf50;
+    }
+    .task-card.status-failed { border-color: #e94560; }
+    .task-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .task-code {
+      font-size: 11px;
+      font-weight: 600;
       color: #a8d8ea;
-      border: 1px solid #16213e;
-      border-radius: 4px;
-      padding: 3px 5px;
-      font-size: 11px;
-      margin-top: 2px;
-      cursor: pointer;
+      font-family: 'Consolas', 'Monaco', monospace;
     }
-    .cfg-select:focus { outline: none; border-color: #a8d8ea; }
-
-    .btn-sm {
-      padding: 3px 7px;
-      border: none;
-      border-radius: 4px;
+    .task-status-badge {
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+    .badge-pending { background: rgba(240, 173, 78, 0.2); color: #f0ad4e; }
+    .badge-running,
+    .badge-configuring { background: rgba(91, 192, 222, 0.2); color: #5bc0de; }
+    .badge-generating { background: rgba(240, 173, 78, 0.2); color: #f0ad4e; }
+    .badge-uploading,
+    .badge-uploading_hd { background: rgba(155, 89, 182, 0.2); color: #9b59b6; }
+    .badge-upscaling { background: rgba(230, 126, 34, 0.2); color: #e67e22; }
+    .badge-completed { background: rgba(76, 175, 80, 0.2); color: #4caf50; }
+    .badge-failed { background: rgba(233, 69, 96, 0.2); color: #e94560; }
+    .task-card-body {
       font-size: 10px;
+      color: #8b8fa3;
+      margin-bottom: 4px;
+    }
+    .task-desc { margin-bottom: 2px; }
+    .task-prompt {
+      color: #ccc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .task-card-meta {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .task-meta-tag {
+      background: #0f3460;
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 9px;
+      color: #a8d8ea;
+    }
+    .task-card-actions {
+      display: flex;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+    .task-card-actions button {
+      font-size: 10px;
+      padding: 2px 8px;
+      border: none;
+      border-radius: 3px;
       cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-exec {
       background: #e94560;
       color: #fff;
     }
-    .btn-sm:hover { opacity: 0.9; }
-    .btn-sm-cancel { background: #0f3460; color: #a8d8ea; }
-
-    .conn-status {
-      font-size: 10px;
-      text-align: center;
-      padding: 3px;
-      border-radius: 4px;
-      margin-bottom: 6px;
-      display: none;
+    .btn-exec:hover { opacity: 0.8; }
+    .btn-exec:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-skip {
+      background: #0f3460;
+      color: #a8d8ea;
     }
-    .conn-status.connected {
-      display: block;
-      background: rgba(76, 175, 80, 0.15);
-      color: #4caf50;
-    }
-    .conn-status.disconnected {
-      display: block;
-      background: rgba(233, 69, 96, 0.15);
-      color: #e94560;
-    }
-
-    .task-delay-section {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 10px;
-      font-size: 11px;
-      color: #8b8fa3;
-    }
-    .task-delay-input {
-      width: 50px;
-      background: #16213e;
-      border: 1px solid #0f3460;
-      border-radius: 4px;
-      color: #e0e0e0;
-      padding: 3px 5px;
-      font-size: 11px;
-      text-align: center;
-    }
-    .task-delay-input:focus { outline: none; border-color: #a8d8ea; }
+    .btn-skip:hover { background: #16213e; }
   </style>
 </head>
 <body>
+  <!-- ===== Header ===== -->
   <div class="header">
     <h1>Seedance 2.0 批量生成</h1>
     <button class="btn-collapse" id="btnCollapse" title="收起面板">✕</button>
   </div>
 
-  <div class="section">
-    <div class="section-title">预设参数 <span id="presetEditToggle" style="float:right;cursor:pointer;font-size:10px;color:#a8d8ea;">✏️ 编辑</span></div>
-    <div class="preset-info" id="presetDisplay">
-      <div class="preset-tag" id="tagModel">🤖 Seedance 2.0</div>
-      <div class="preset-tag" id="tagRefMode">⚡ 首尾帧</div>
-      <div class="preset-tag" id="tagRatio">📐 16:9</div>
-      <div class="preset-tag" id="tagDuration">⏱️ 5s</div>
-    </div>
-    <div id="presetEditor" style="display:none;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
-        <label style="font-size:10px;color:#8b8fa3;">
-          模型
-          <select id="cfgModel" class="cfg-select">
-            <option value="Seedance 2.0">Seedance 2.0</option>
-            <option value="Seedance 2.0 Fast">Seedance 2.0 Fast</option>
-            <option value="视频 3.5 Pro">视频 3.5 Pro</option>
-            <option value="视频 3.0 Pro">视频 3.0 Pro</option>
-            <option value="视频 3.0 Fast">视频 3.0 Fast</option>
-            <option value="视频 3.0">视频 3.0</option>
-          </select>
-        </label>
-        <label style="font-size:10px;color:#8b8fa3;">
-          参考模式
-          <select id="cfgRefMode" class="cfg-select">
-            <option value="全能参考">全能参考</option>
-            <option value="首尾帧">首尾帧</option>
-            <option value="智能多帧">智能多帧</option>
-            <option value="主体参考">主体参考</option>
-          </select>
-        </label>
-        <label style="font-size:10px;color:#8b8fa3;">
-          画面比例
-          <select id="cfgRatio" class="cfg-select">
-            <option value="16:9">16:9</option>
-            <option value="9:16">9:16</option>
-            <option value="1:1">1:1</option>
-            <option value="4:3">4:3</option>
-            <option value="3:4">3:4</option>
-            <option value="21:9">21:9</option>
-          </select>
-        </label>
-        <label style="font-size:10px;color:#8b8fa3;">
-          视频时长
-          <select id="cfgDuration" class="cfg-select">
-            <option value="5s">5s</option>
-            <option value="4s">4s</option>
-            <option value="6s">6s</option>
-            <option value="7s">7s</option>
-            <option value="8s">8s</option>
-            <option value="9s">9s</option>
-            <option value="10s">10s</option>
-            <option value="11s">11s</option>
-            <option value="12s">12s</option>
-            <option value="13s">13s</option>
-            <option value="14s">14s</option>
-            <option value="15s">15s</option>
-          </select>
-        </label>
+  <!-- ===== Global Task Stats (always visible) ===== -->
+  <div class="global-stats">
+    <div class="task-stat"><span class="dot dot-pending"></span><span class="num" id="statPending">0</span>待处理</div>
+    <div class="task-stat"><span class="dot dot-running"></span><span class="num" id="statRunning">0</span>执行中</div>
+    <div class="task-stat"><span class="dot dot-generating"></span><span class="num" id="statGenerating">0</span>生成</div>
+    <div class="task-stat"><span class="dot dot-upscaling"></span><span class="num" id="statUpscaling">0</span>提升</div>
+    <div class="task-stat"><span class="dot dot-completed"></span><span class="num" id="statCompleted">0</span>完成</div>
+    <div class="task-stat"><span class="dot dot-failed"></span><span class="num" id="statFailed">0</span>失败</div>
+  </div>
+
+  <!-- ===== Tab Bar ===== -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="recv">📡 接收任务</button>
+    <button class="tab-btn" data-tab="manual">✏️ 手动提交</button>
+    <button class="tab-btn" data-tab="tasks">📋 任务列表 <span class="tab-badge" id="taskCountBadge"></span></button>
+  </div>
+
+  <!-- ===== Tab 1: 接收任务 ===== -->
+  <div class="tab-content active" id="tab-recv">
+    <div class="section">
+      <div class="section-title">🔗 API 连接</div>
+      <div class="api-config-row">
+        <span>API:</span>
+        <input type="text" class="api-url-input" id="apiUrlInput" value="http://localhost:3456" placeholder="http://localhost:3456">
+        <button class="sse-toggle-btn" id="btnSSEToggle" title="开启/关闭 SSE 长连接">📡 连接</button>
       </div>
-      <div style="display:flex;gap:5px;margin-top:5px;">
-        <button class="btn-sm" id="presetSave" style="flex:1;">💾 保存</button>
-        <button class="btn-sm btn-sm-cancel" id="presetCancel" style="flex:1;">取消</button>
+      <div class="sse-info-row" id="sseStatusRow" style="display:none;">
+        <span class="sse-dot" id="sseIndicator"></span>
+        <span id="sseStatusText" style="flex:1;">未连接</span>
+        <span style="color:#555;">ID:</span>
+        <span id="sseClientId" style="font-family:monospace;font-size:9px;color:#a8d8ea;">-</span>
       </div>
     </div>
-  </div>
 
-  <div style="display:flex;gap:5px;margin-bottom:10px;">
-    <button class="btn btn-preset" id="btnPreset" style="flex:1;margin-bottom:0;">🔧 应用预设参数</button>
-    <button class="btn btn-preset" id="btnCheckPage" style="flex:0 0 auto;margin-bottom:0;padding:8px 12px;" title="检查页面连接">🔗</button>
-  </div>
-
-  <div class="conn-status" id="connStatus"></div>
-
-  <div class="prompt-section">
-    <div class="section-title" style="margin-bottom: 4px;">提示词（可选）</div>
-    <textarea class="prompt-input" id="promptInput" placeholder="输入生成提示词，所有任务共用此提示词..."></textarea>
-  </div>
-
-  <div class="task-delay-section">
-    <span>任务间隔:</span>
-    <input type="number" class="task-delay-input" id="taskDelay" value="2" min="1" max="30">
-    <span>秒</span>
-  </div>
-
-  <div class="upload-area" id="uploadArea">
-    <div class="icon">📁</div>
-    <div class="text">点击或拖拽添加参考图/视频</div>
-    <div class="hint">支持 JPG/PNG/WEBP/MP4/MOV，最多30个</div>
-  </div>
-  <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp,image/bmp,video/mp4,video/quicktime">
-
-  <div class="status-bar" id="statusBar" style="display:none;">
-    <span class="count" id="fileCount">0 / 30 张</span>
-    <button class="clear-btn" id="btnClear">清空</button>
-  </div>
-
-  <div class="file-list" id="fileList"></div>
-
-  <button class="btn btn-primary" id="btnDoGenerate" title="上传参考图并填写提示词（支持@引用）">📤 上传并填写</button>
-
-  <div class="progress" id="progress">
-    <div class="progress-bar">
-      <div class="progress-fill" id="progressFill"></div>
+    <div class="section">
+      <div class="section-title">⚡ 执行控制</div>
+      <div class="recv-controls">
+        <button class="btn-fetch" id="btnFetchTasks">🔄 拉取任务</button>
+        <button class="btn-auto" id="btnAutoExec" title="流水线模式: 配置→生成→上传→提升→上传高清">▶ 自动执行</button>
+      </div>
+      <div class="task-delay-section">
+        <span>任务间隔:</span>
+        <input type="number" class="task-delay-input" id="taskDelay" value="2" min="1" max="30">
+        <span>秒</span>
+      </div>
     </div>
-    <div class="progress-text" id="progressText">准备中...</div>
+
+    <div class="conn-status" id="connStatus"></div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <span class="section-title" style="margin-bottom:0;">📝 日志</span>
+      <button style="font-size:9px;padding:2px 6px;border:1px solid #0f3460;border-radius:3px;background:#16213e;color:#8b8fa3;cursor:pointer;" id="btnClearLog">清空</button>
+    </div>
+    <div class="recv-log" id="log"></div>
   </div>
 
-  <div class="log" id="log"></div>
+  <!-- ===== Tab 2: 手动提交 ===== -->
+  <div class="tab-content" id="tab-manual">
+    <div class="section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div class="section-title" style="margin-bottom:0;">预设参数</div>
+        <span id="presetEditToggle" style="cursor:pointer;font-size:10px;color:#a8d8ea;">✏️ 编辑</span>
+      </div>
+      <div class="preset-info" id="presetDisplay">
+        <div class="preset-tag" id="tagModel">🤖 Seedance 2.0</div>
+        <div class="preset-tag" id="tagRefMode">⚡ 首尾帧</div>
+        <div class="preset-tag" id="tagRatio">📐 16:9</div>
+        <div class="preset-tag" id="tagDuration">⏱️ 5s</div>
+      </div>
+      <div id="presetEditor" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <label style="font-size:10px;color:#8b8fa3;">
+            模型
+            <select id="cfgModel" class="cfg-select">
+              <option value="Seedance 2.0">Seedance 2.0</option>
+              <option value="Seedance 2.0 Fast">Seedance 2.0 Fast</option>
+              <option value="视频 3.5 Pro">视频 3.5 Pro</option>
+              <option value="视频 3.0 Pro">视频 3.0 Pro</option>
+              <option value="视频 3.0 Fast">视频 3.0 Fast</option>
+              <option value="视频 3.0">视频 3.0</option>
+            </select>
+          </label>
+          <label style="font-size:10px;color:#8b8fa3;">
+            参考模式
+            <select id="cfgRefMode" class="cfg-select">
+              <option value="全能参考">全能参考</option>
+              <option value="首尾帧">首尾帧</option>
+              <option value="智能多帧">智能多帧</option>
+              <option value="主体参考">主体参考</option>
+            </select>
+          </label>
+          <label style="font-size:10px;color:#8b8fa3;">
+            画面比例
+            <select id="cfgRatio" class="cfg-select">
+              <option value="16:9">16:9</option>
+              <option value="9:16">9:16</option>
+              <option value="1:1">1:1</option>
+              <option value="4:3">4:3</option>
+              <option value="3:4">3:4</option>
+              <option value="21:9">21:9</option>
+            </select>
+          </label>
+          <label style="font-size:10px;color:#8b8fa3;">
+            视频时长
+            <select id="cfgDuration" class="cfg-select">
+              <option value="5s">5s</option>
+              <option value="4s">4s</option>
+              <option value="6s">6s</option>
+              <option value="7s">7s</option>
+              <option value="8s">8s</option>
+              <option value="9s">9s</option>
+              <option value="10s">10s</option>
+              <option value="11s">11s</option>
+              <option value="12s">12s</option>
+              <option value="13s">13s</option>
+              <option value="14s">14s</option>
+              <option value="15s">15s</option>
+            </select>
+          </label>
+        </div>
+        <div style="display:flex;gap:5px;margin-top:5px;">
+          <button class="btn-sm" id="presetSave" style="flex:1;">💾 保存</button>
+          <button class="btn-sm btn-sm-cancel" id="presetCancel" style="flex:1;">取消</button>
+        </div>
+      </div>
+      <div class="action-row" style="margin-top:8px;margin-bottom:0;">
+        <button class="btn btn-preset" id="btnPreset">🔧 应用预设</button>
+        <button class="btn btn-preset" id="btnCheckPage" title="检查页面连接">🔗 检查连接</button>
+      </div>
+    </div>
+
+    <div class="prompt-section">
+      <div class="section-title" style="margin-bottom: 4px;">提示词（可选）</div>
+      <textarea class="prompt-input" id="promptInput" placeholder="输入生成提示词，所有任务共用此提示词..."></textarea>
+    </div>
+
+    <div class="upload-area" id="uploadArea">
+      <div class="icon">📁</div>
+      <div class="text">点击或拖拽添加参考图/视频</div>
+      <div class="hint">支持 JPG/PNG/WEBP/MP4/MOV，最多30个</div>
+    </div>
+    <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp,image/bmp,video/mp4,video/quicktime">
+
+    <div class="status-bar" id="statusBar" style="display:none;">
+      <span class="count" id="fileCount">0 / 30 张</span>
+      <button class="clear-btn" id="btnClear">清空</button>
+    </div>
+
+    <div class="file-list" id="fileList"></div>
+    <div class="quick-insert-row" id="quickInsertRow"></div>
+
+    <div class="action-bar">
+      <button class="btn btn-primary" id="btnDoGenerate">📤 上传并填写</button>
+      <button class="btn btn-danger" id="btnSubmitGenerate">🚀 提交生成</button>
+    </div>
+
+    <!-- ===== 视频下载区 ===== -->
+    <div class="section" style="margin-top:10px;">
+      <div class="section-title" style="margin-bottom:6px;">📥 视频检索与下载</div>
+      <div style="display:flex;gap:5px;align-items:center;">
+        <input type="text" id="videoTaskCodeInput" placeholder="输入任务ID，如 SD-20260215-67co-002"
+               style="flex:1;padding:6px 8px;border:1px solid #0f3460;border-radius:5px;background:#0d1b3e;color:#e0e0e0;font-size:11px;outline:none;font-family:monospace;">
+        <button class="btn btn-preset" id="btnSearchVideo" style="width:auto;white-space:nowrap;padding:6px 10px;font-size:11px;">🔍 检索</button>
+      </div>
+      <div id="videoSearchResult" style="margin-top:8px;display:none;">
+        <div id="videoStatusText" style="font-size:11px;color:#8b8fa3;margin-bottom:6px;"></div>
+        <div id="videoHDBadge" style="display:none;margin-bottom:6px;">
+          <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:bold;letter-spacing:0.5px;"></span>
+        </div>
+        <div id="videoActions" style="display:none;">
+          <div id="videoPreview" style="margin-bottom:6px;border-radius:6px;overflow:hidden;background:#000;"></div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="btnDownloadVideo" style="font-size:11px;padding:6px 8px;">⬇️ 原生下载</button>
+            <button class="btn btn-preset" id="btnOpenVideo" style="font-size:11px;padding:6px 8px;">🔗 新标签打开</button>
+            <button class="btn btn-preset" id="btnUpscaleVideo" style="font-size:11px;padding:6px 8px;display:none;">🔺 提升分辨率</button>
+            <button class="btn btn-primary" id="btnDownloadHD" style="font-size:11px;padding:6px 8px;display:none;">⬇️ 下载高清</button>
+            <button class="btn btn-primary" id="btnUploadServer" style="font-size:11px;padding:6px 8px;background:#0d7377;border-color:#0d7377;">📤 上传服务器</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="progress" id="progress">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-text" id="progressText">准备中...</div>
+    </div>
+  </div>
+
+  <!-- ===== Tab 3: 任务列表 ===== -->
+  <div class="tab-content" id="tab-tasks">
+    <div class="task-list-controls">
+      <button id="btnClearTasks">🗑️ 清理完成/失败</button>
+      <button id="btnClearAllTasks">🗑️ 全部清空</button>
+    </div>
+    <div class="task-list" id="taskList"></div>
+  </div>
+
+  <!-- 文件预览弹窗 -->
+  <div class="file-preview-overlay" id="filePreviewOverlay">
+    <span class="preview-close" id="previewClose">✕</span>
+    <div id="previewContent"></div>
+    <div class="preview-filename" id="previewFilename"></div>
+  </div>
 
   <script src="panel.js"></script>
 </body>

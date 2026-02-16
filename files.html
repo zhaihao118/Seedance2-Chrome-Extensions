@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seedance 文件预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0e27;
+    color: #e0e0e0;
+    min-height: 100vh;
+  }
+  .header {
+    background: linear-gradient(135deg, #1a1a3e 0%, #16213e 100%);
+    padding: 20px 30px;
+    border-bottom: 1px solid #1e3a5f;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 {
+    font-size: 20px;
+    color: #a8d8ea;
+  }
+  .header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .badge {
+    background: #0f3460;
+    color: #a8d8ea;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+  .badge-hd {
+    background: rgba(76,175,80,0.2);
+    color: #4caf50;
+    border: 1px solid rgba(76,175,80,0.4);
+  }
+  .badge-standard {
+    background: rgba(139,143,163,0.2);
+    color: #8b8fa3;
+    border: 1px solid rgba(139,143,163,0.3);
+  }
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  /* 搜索和过滤 */
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .toolbar input {
+    flex: 1;
+    min-width: 200px;
+    padding: 8px 14px;
+    background: #16213e;
+    border: 1px solid #1e3a5f;
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-size: 14px;
+    outline: none;
+    font-family: monospace;
+  }
+  .toolbar input:focus { border-color: #3a7bd5; }
+  .toolbar button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+  .btn-refresh {
+    background: #0f3460;
+    color: #a8d8ea;
+  }
+  .btn-refresh:hover { background: #1a4a80; }
+  .btn-link {
+    background: transparent;
+    color: #a8d8ea;
+    text-decoration: underline;
+    padding: 8px;
+  }
+
+  /* 统计信息 */
+  .stats {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .stat-card {
+    background: #16213e;
+    border: 1px solid #1e3a5f;
+    border-radius: 10px;
+    padding: 12px 20px;
+    min-width: 120px;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: #a8d8ea;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: #8b8fa3;
+    margin-top: 2px;
+  }
+
+  /* 任务分组 */
+  .task-group {
+    background: #16213e;
+    border: 1px solid #1e3a5f;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .task-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: #1a2744;
+    border-bottom: 1px solid #1e3a5f;
+    cursor: pointer;
+    user-select: none;
+  }
+  .task-group-header:hover {
+    background: #1e2d50;
+  }
+  .task-code {
+    font-family: monospace;
+    font-size: 15px;
+    color: #a8d8ea;
+    font-weight: bold;
+  }
+  .task-group-meta {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-size: 12px;
+    color: #8b8fa3;
+  }
+  .task-group-body {
+    padding: 16px 20px;
+  }
+
+  /* 文件网格 */
+  .file-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+  .file-card {
+    background: #0d1b36;
+    border: 1px solid #1e3a5f;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .file-card:hover {
+    border-color: #3a7bd5;
+    transform: translateY(-2px);
+  }
+  .file-preview {
+    position: relative;
+    background: #000;
+    aspect-ratio: 16/9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .file-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .file-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .quality-tag {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    z-index: 2;
+  }
+  .quality-hd {
+    background: rgba(76,175,80,0.85);
+    color: #fff;
+  }
+  .quality-standard {
+    background: rgba(100,100,120,0.85);
+    color: #ddd;
+  }
+  .file-info {
+    padding: 12px 14px;
+  }
+  .file-name {
+    font-size: 12px;
+    font-family: monospace;
+    color: #a8d8ea;
+    word-break: break-all;
+    margin-bottom: 6px;
+  }
+  .file-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #8b8fa3;
+    margin-bottom: 8px;
+  }
+  .file-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .file-actions a, .file-actions button {
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s;
+  }
+  .btn-download {
+    background: #0f3460;
+    color: #a8d8ea;
+  }
+  .btn-download:hover { background: #1a4a80; }
+  .btn-open {
+    background: rgba(139,143,163,0.2);
+    color: #8b8fa3;
+  }
+  .btn-open:hover { background: rgba(139,143,163,0.3); }
+
+  /* 空状态 */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #555;
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state h3 { font-size: 16px; color: #8b8fa3; margin-bottom: 6px; }
+  .empty-state p { font-size: 13px; color: #555; }
+
+  /* 展开/收起 */
+  .collapsed .task-group-body { display: none; }
+  .toggle-icon {
+    transition: transform 0.2s;
+    font-size: 12px;
+    color: #8b8fa3;
+  }
+  .collapsed .toggle-icon { transform: rotate(-90deg); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📁 Seedance 文件预览</h1>
+  <div class="header-actions">
+    <span class="badge" id="totalBadge">0 文件</span>
+    <a href="/admin" style="color:#a8d8ea;text-decoration:none;font-size:13px;">← 任务管理</a>
+  </div>
+</div>
+
+<div class="container">
+  <!-- 工具栏 -->
+  <div class="toolbar">
+    <input type="text" id="filterInput" placeholder="输入任务号过滤，如 SD-20260215-xxxx...">
+    <button class="btn-refresh" id="btnRefresh">🔄 刷新</button>
+  </div>
+
+  <!-- 统计 -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-value" id="statTotal">0</div>
+      <div class="stat-label">总文件数</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statTasks">0</div>
+      <div class="stat-label">任务数</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statHD">0</div>
+      <div class="stat-label">高清 HD</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statStandard">0</div>
+      <div class="stat-label">标准</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statSize">0</div>
+      <div class="stat-label">总大小 (MB)</div>
+    </div>
+  </div>
+
+  <!-- 文件列表 -->
+  <div id="fileList"></div>
+</div>
+
+<script>
+const API = window.location.origin;
+const filterInput = document.getElementById('filterInput');
+const btnRefresh = document.getElementById('btnRefresh');
+const fileList = document.getElementById('fileList');
+const totalBadge = document.getElementById('totalBadge');
+const statTotal = document.getElementById('statTotal');
+const statTasks = document.getElementById('statTasks');
+const statHD = document.getElementById('statHD');
+const statStandard = document.getElementById('statStandard');
+const statSize = document.getElementById('statSize');
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function formatTime(isoStr) {
+  const d = new Date(isoStr);
+  return d.toLocaleString('zh-CN', {
+    month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function loadFiles() {
+  const filterValue = filterInput.value.trim();
+  const queryParams = filterValue ? `?taskCode=${encodeURIComponent(filterValue)}` : '';
+
+  try {
+    const resp = await fetch(`${API}/api/files${queryParams}`);
+    const data = await resp.json();
+
+    if (!data.success) {
+      fileList.innerHTML = '<div class="empty-state"><div class="icon">❌</div><h3>加载失败</h3></div>';
+      return;
+    }
+
+    const files = data.files || [];
+    const grouped = data.grouped || {};
+
+    // 更新统计
+    const hdCount = files.filter(f => f.quality === 'hd').length;
+    const stdCount = files.filter(f => f.quality !== 'hd').length;
+    const totalSize = files.reduce((sum, f) => sum + (f.size || 0), 0);
+    const taskCount = Object.keys(grouped).length;
+
+    statTotal.textContent = files.length;
+    statTasks.textContent = taskCount;
+    statHD.textContent = hdCount;
+    statStandard.textContent = stdCount;
+    statSize.textContent = (totalSize / (1024 * 1024)).toFixed(1);
+    totalBadge.textContent = `${files.length} 文件`;
+
+    if (files.length === 0) {
+      fileList.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">📂</div>
+          <h3>暂无上传文件</h3>
+          <p>在扩展面板中检索视频后，点击"📤 上传服务器"将视频上传到此处</p>
+        </div>`;
+      return;
+    }
+
+    // 按任务号分组渲染, 最新的在前
+    const taskCodes = Object.keys(grouped).sort((a, b) => {
+      // 按最新上传时间排序
+      const aLatest = grouped[a].reduce((max, f) => f.uploadedAt > max ? f.uploadedAt : max, '');
+      const bLatest = grouped[b].reduce((max, f) => f.uploadedAt > max ? f.uploadedAt : max, '');
+      return bLatest.localeCompare(aLatest);
+    });
+
+    let html = '';
+    for (const taskCode of taskCodes) {
+      const taskFiles = grouped[taskCode];
+      const hasHD = taskFiles.some(f => f.quality === 'hd');
+      const hasStd = taskFiles.some(f => f.quality !== 'hd');
+      const totalTaskSize = taskFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+      const latestUpload = taskFiles.reduce((max, f) => f.uploadedAt > max ? f.uploadedAt : max, '');
+
+      html += `
+        <div class="task-group" id="group-${escapeHtml(taskCode)}">
+          <div class="task-group-header" onclick="toggleGroup(this)">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="toggle-icon">▼</span>
+              <span class="task-code">${escapeHtml(taskCode)}</span>
+              ${hasHD ? '<span class="badge badge-hd" style="font-size:10px;padding:2px 8px;">HD</span>' : ''}
+              ${hasStd ? '<span class="badge badge-standard" style="font-size:10px;padding:2px 8px;">标准</span>' : ''}
+            </div>
+            <div class="task-group-meta">
+              <span>${taskFiles.length} 个文件</span>
+              <span>${formatSize(totalTaskSize)}</span>
+              <span>${formatTime(latestUpload)}</span>
+            </div>
+          </div>
+          <div class="task-group-body">
+            <div class="file-grid">
+              ${taskFiles.map(f => renderFileCard(f)).join('')}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    fileList.innerHTML = html;
+
+  } catch (err) {
+    fileList.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">❌</div>
+        <h3>连接失败</h3>
+        <p>${escapeHtml(err.message)}</p>
+      </div>`;
+  }
+}
+
+function renderFileCard(f) {
+  const isVideo = (f.mimeType || '').startsWith('video');
+  const isImage = (f.mimeType || '').startsWith('image');
+  const fileUrl = `${API}/api/files/${f.fileId}`;
+  const qualityClass = f.quality === 'hd' ? 'quality-hd' : 'quality-standard';
+  const qualityLabel = f.quality === 'hd' ? 'HD 高清' : '标准';
+
+  let previewHtml = '';
+  if (isVideo) {
+    previewHtml = `<video src="${fileUrl}" controls preload="metadata" muted></video>`;
+  } else if (isImage) {
+    previewHtml = `<img src="${fileUrl}" alt="${escapeHtml(f.filename)}">`;
+  } else {
+    previewHtml = `<div style="color:#555;font-size:14px;">📄 ${escapeHtml(f.mimeType || 'unknown')}</div>`;
+  }
+
+  return `
+    <div class="file-card">
+      <div class="file-preview">
+        ${previewHtml}
+        <span class="quality-tag ${qualityClass}">${qualityLabel}</span>
+      </div>
+      <div class="file-info">
+        <div class="file-name">${escapeHtml(f.filename)}</div>
+        <div class="file-meta">
+          <span>${formatSize(f.size)}</span>
+          <span>${formatTime(f.uploadedAt)}</span>
+        </div>
+        <div class="file-actions">
+          <a class="btn-download" href="${fileUrl}" download="${escapeHtml(f.filename)}">⬇️ 下载</a>
+          <a class="btn-open" href="${fileUrl}" target="_blank">🔗 新标签</a>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleGroup(header) {
+  const group = header.parentElement;
+  group.classList.toggle('collapsed');
+}
+
+// 事件绑定
+btnRefresh.addEventListener('click', loadFiles);
+filterInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loadFiles();
+});
+
+// 防抖过滤
+let filterTimer = null;
+filterInput.addEventListener('input', () => {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(loadFiles, 500);
+});
+
+// 初始加载
+loadFiles();
+// 定时刷新
+setInterval(loadFiles, 15000);
+</script>
+</body>
+</html>

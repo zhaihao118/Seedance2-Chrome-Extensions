@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seedance 任务管理</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0e27;
+    color: #e0e0e0;
+    min-height: 100vh;
+  }
+  .header {
+    background: linear-gradient(135deg, #1a1a3e 0%, #16213e 100%);
+    padding: 20px 30px;
+    border-bottom: 1px solid #1e3a5f;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 {
+    font-size: 20px;
+    color: #a8d8ea;
+  }
+  .header .badge {
+    background: #0f3460;
+    color: #a8d8ea;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .panel {
+    background: #16213e;
+    border: 1px solid #1e3a5f;
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .panel-title {
+    font-size: 16px;
+    color: #a8d8ea;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-full { grid-column: 1 / -1; }
+
+  /* Form */
+  label {
+    display: block;
+    font-size: 12px;
+    color: #8b8fa3;
+    margin-bottom: 4px;
+    margin-top: 12px;
+  }
+  label:first-child { margin-top: 0; }
+  input[type="text"], textarea, select {
+    width: 100%;
+    padding: 8px 12px;
+    background: #0d1b36;
+    border: 1px solid #1e3a5f;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: #3a7bd5;
+  }
+  select { cursor: pointer; }
+
+  /* Checkbox */
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: #0d1b36;
+    border: 1px solid #1e3a5f;
+    border-radius: 6px;
+  }
+  .checkbox-row.warn {
+    border-color: #e94560;
+    background: rgba(233, 69, 96, 0.1);
+  }
+  .checkbox-row input[type="checkbox"] {
+    width: 16px; height: 16px; cursor: pointer;
+  }
+  .checkbox-row .cb-label {
+    font-size: 13px;
+    cursor: pointer;
+    flex: 1;
+  }
+  .checkbox-row .cb-hint {
+    font-size: 10px;
+    color: #e94560;
+  }
+
+  /* Quick insert row */
+  .quick-insert-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .qi-label {
+    font-size: 11px;
+    color: #8b8fa3;
+    white-space: nowrap;
+  }
+  .qi-hint {
+    font-size: 10px;
+    color: #555;
+    font-style: italic;
+  }
+  .qi-btn {
+    padding: 3px 10px;
+    font-size: 11px;
+    border: 1px solid #1e3a5f;
+    border-radius: 4px;
+    background: #0d1b36;
+    color: #a8d8ea;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .qi-btn:hover { border-color: #3a7bd5; color: #3a7bd5; background: rgba(58,123,213,0.08); }
+  .qi-btn:active { transform: scale(0.95); }
+  .qi-btn-custom { background: #16213e; }
+  .qi-custom {
+    width: 100px;
+    padding: 3px 8px;
+    font-size: 11px;
+    background: #0d1b36;
+    border: 1px solid #1e3a5f;
+    border-radius: 4px;
+    color: #e0e0e0;
+  }
+  .qi-custom:focus { border-color: #3a7bd5; outline: none; }
+
+  /* Upload area */
+  .upload-area {
+    border: 2px dashed #1e3a5f;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 12px;
+  }
+  .upload-area:hover { border-color: #3a7bd5; background: rgba(58, 123, 213, 0.05); }
+  .upload-area .icon { font-size: 28px; margin-bottom: 6px; }
+  .upload-area .text { font-size: 13px; color: #8b8fa3; }
+  .upload-file-input { display: none; }
+
+  .file-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .file-thumb {
+    position: relative;
+    width: 64px; height: 64px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #1e3a5f;
+  }
+  .file-thumb img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .file-thumb .remove {
+    position: absolute;
+    top: 2px; right: 2px;
+    width: 16px; height: 16px;
+    background: rgba(233, 69, 96, 0.8);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #3a7bd5, #6c5ce7);
+    color: #fff;
+    flex: 1;
+  }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-secondary {
+    background: #1e3a5f;
+    color: #a8d8ea;
+  }
+  .btn-secondary:hover { background: #2a4a6f; }
+  .btn-danger {
+    background: #e94560;
+    color: #fff;
+  }
+  .btn-danger:hover { background: #d63851; }
+  .btn-sm {
+    padding: 5px 12px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid #1e3a5f;
+    background: #16213e;
+    color: #a8d8ea;
+    cursor: pointer;
+  }
+  .btn-sm:hover { background: #1e3a5f; }
+  .btn-sm.active { border-color: #3a7bd5; color: #3a7bd5; }
+
+  /* Preset cards */
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .preset-card {
+    background: #0d1b36;
+    border: 1px solid #1e3a5f;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .preset-card:hover { border-color: #3a7bd5; transform: translateY(-1px); }
+  .preset-card .preset-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #a8d8ea;
+    margin-bottom: 6px;
+  }
+  .preset-card .preset-desc {
+    font-size: 11px;
+    color: #8b8fa3;
+    margin-bottom: 6px;
+    line-height: 1.4;
+  }
+  .preset-card .preset-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .preset-card .tag {
+    font-size: 9px;
+    padding: 2px 6px;
+    background: #16213e;
+    border-radius: 3px;
+    color: #8b8fa3;
+  }
+
+  /* Task list */
+  .task-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 10px;
+  }
+  .task-table th {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 1px solid #1e3a5f;
+    color: #8b8fa3;
+    font-weight: 500;
+  }
+  .task-table td {
+    padding: 8px;
+    border-bottom: 1px solid #0d1b36;
+    color: #cbd5e1;
+  }
+  .task-table tr:hover td { background: rgba(58, 123, 213, 0.05); }
+  .status-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+  .status-pending { background: #1e3a5f; color: #a8d8ea; }
+  .status-occupied { background: #7c3aed20; color: #a78bfa; }
+  .status-acked { background: #065f4620; color: #34d399; }
+  .status-running, .status-configuring { background: #92400e20; color: #fbbf24; }
+  .status-generating { background: #f0ad4e20; color: #f0ad4e; }
+  .status-uploading, .status-uploading_hd { background: #9b59b620; color: #9b59b6; }
+  .status-upscaling { background: #e67e2220; color: #e67e22; }
+  .status-completed { background: #064e3b20; color: #6ee7b7; }
+  .status-failed { background: #7f1d1d20; color: #fca5a5; }
+
+  /* Log */
+  .log-area {
+    background: #0d1b36;
+    border: 1px solid #1e3a5f;
+    border-radius: 6px;
+    padding: 10px;
+    font-family: 'Consolas', monospace;
+    font-size: 11px;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 10px;
+    line-height: 1.6;
+    color: #8b8fa3;
+  }
+  .log-area .log-success { color: #6ee7b7; }
+  .log-area .log-error { color: #fca5a5; }
+
+  /* SSE status */
+  .sse-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .sse-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #555;
+  }
+  .sse-dot.on { background: #4caf50; animation: pulse 2s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Model config row */
+  .config-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  /* ===== 移动端适配 ===== */
+  @media (max-width: 768px) {
+    .header {
+      padding: 12px 16px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .header h1 { font-size: 16px; }
+    .sse-status { font-size: 11px; }
+
+    .container {
+      padding: 12px;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .panel { padding: 14px; border-radius: 10px; }
+    .panel-full { grid-column: 1; }
+
+    .config-row {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .preset-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .preset-card { padding: 10px; }
+    .preset-card .preset-desc { font-size: 10px; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+
+    .upload-area { padding: 14px; }
+    .upload-area .icon { font-size: 22px; }
+
+    .btn { padding: 10px 14px; font-size: 13px; }
+    .btn-row { flex-direction: column; }
+
+    /* 任务表格改为卡片布局 */
+    .task-table thead { display: none; }
+    .task-table, .task-table tbody, .task-table tr, .task-table td {
+      display: block;
+      width: 100%;
+    }
+    .task-table tr {
+      background: #0d1b36;
+      border: 1px solid #1e3a5f;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    .task-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: none;
+      font-size: 12px;
+    }
+    .task-table td::before {
+      content: attr(data-label);
+      font-size: 11px;
+      color: #8b8fa3;
+      font-weight: 500;
+      margin-right: 8px;
+      white-space: nowrap;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .header h1 { font-size: 14px; }
+    .container { padding: 8px; gap: 10px; }
+    .panel { padding: 10px; }
+    .preset-grid { grid-template-columns: 1fr; }
+    .file-thumb { width: 52px; height: 52px; }
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>📋 Seedance 任务管理 (Mock Server)</h1>
+  <div class="sse-status">
+    <span class="sse-dot" id="sseDot"></span>
+    <span id="sseStatusText">SSE: 0 客户端</span>
+    <span class="badge" id="taskCountBadge">0 任务</span>
+    <a href="/files" style="color:#a8d8ea;text-decoration:none;font-size:12px;margin-left:8px;padding:4px 10px;background:#0d7377;border-radius:8px;">📁 文件预览</a>
+  </div>
+</div>
+
+<div class="container">
+  <!-- 左栏: 创建任务 -->
+  <div class="panel">
+    <div class="panel-title">📤 推送新任务</div>
+
+    <label>描述</label>
+    <input type="text" id="taskDesc" placeholder="任务描述（可选）">
+
+    <label>提示词</label>
+    <textarea id="taskPrompt" rows="3" placeholder="输入生成提示词，支持 (@图片1) (@图片2) 引用..."></textarea>
+    <div class="quick-insert-row" id="quickInsertRow">
+      <span class="qi-label">快捷插入:</span>
+      <span class="qi-hint" id="qiHint">请先上传参考图片</span>
+      <span id="qiButtons"></span>
+      <input class="qi-custom" id="qiCustom" type="text" placeholder="自定义文件名" maxlength="60">
+      <button class="qi-btn qi-btn-custom" id="qiCustomBtn">插入 (@...)</button>
+    </div>
+
+    <div class="config-row">
+      <div>
+        <label>模型</label>
+        <select id="cfgModel">
+          <option value="Seedance 2.0 Fast" selected>Seedance 2.0 Fast</option>
+          <option value="Seedance 2.0">Seedance 2.0</option>
+        </select>
+      </div>
+      <div>
+        <label>参考模式</label>
+        <select id="cfgRefMode">
+          <option value="全能参考" selected>全能参考</option>
+          <option value="首尾帧">首尾帧</option>
+          <option value="主体参考">主体参考</option>
+        </select>
+      </div>
+    </div>
+    <div class="config-row">
+      <div>
+        <label>画面比例</label>
+        <select id="cfgRatio">
+          <option value="16:9" selected>16:9</option>
+          <option value="9:16">9:16</option>
+          <option value="1:1">1:1</option>
+          <option value="4:3">4:3</option>
+          <option value="3:4">3:4</option>
+          <option value="21:9">21:9</option>
+          <option value="9:21">9:21</option>
+        </select>
+      </div>
+      <div>
+        <label>视频时长</label>
+        <select id="cfgDuration">
+          <option value="4s" selected>4s</option>
+          <option value="5s">5s</option>
+          <option value="6s">6s</option>
+          <option value="7s">7s</option>
+          <option value="8s">8s</option>
+          <option value="9s">9s</option>
+          <option value="10s">10s</option>
+        </select>
+      </div>
+    </div>
+
+    <label>参考图片</label>
+    <div class="upload-area" id="uploadArea">
+      <div class="icon">📁</div>
+      <div class="text">点击或拖拽上传参考图片</div>
+    </div>
+    <input type="file" class="upload-file-input" id="fileInput" multiple accept="image/jpeg,image/png,image/webp">
+    <div class="file-preview" id="filePreview"></div>
+
+    <div class="checkbox-row" id="realSubmitRow">
+      <input type="checkbox" id="realSubmit">
+      <label class="cb-label" for="realSubmit">真实提交到 Seedance 2.0 生成</label>
+      <span class="cb-hint">默认模拟</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnPush">📤 推送任务</button>
+    </div>
+  </div>
+
+  <!-- 右栏: 预制案例 -->
+  <div class="panel">
+    <div class="panel-title">⚡ 快捷预制案例</div>
+    <p style="font-size: 11px; color: #8b8fa3; margin-bottom: 10px;">点击卡片一键填充，或直接推送</p>
+    <div class="preset-grid" id="presetGrid"></div>
+
+    <div style="margin-top: 20px; border-top: 1px solid #1e3a5f; padding-top: 15px;">
+      <div class="panel-title" style="margin-bottom: 10px;">📡 SSE 客户端</div>
+      <div id="sseClientList" style="font-size: 12px; color: #8b8fa3;">暂无连接</div>
+    </div>
+
+    <div style="margin-top: 15px;">
+      <div class="panel-title" style="margin-bottom: 10px;">📝 操作日志</div>
+      <div class="log-area" id="logArea"></div>
+    </div>
+  </div>
+
+  <!-- 底部: 任务列表 -->
+  <div class="panel panel-full">
+    <div class="panel-title" style="justify-content: space-between;">
+      <span>📋 任务列表</span>
+      <button class="btn-sm" id="btnRefreshTasks">🔄 刷新</button>
+    </div>
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th>任务编号</th>
+          <th>描述</th>
+          <th>提示词</th>
+          <th>图片</th>
+          <th>状态</th>
+          <th>真实提交</th>
+          <th>占用者</th>
+          <th>创建时间</th>
+        </tr>
+      </thead>
+      <tbody id="taskTableBody">
+        <tr><td colspan="8" style="text-align:center;color:#555;">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+
+// ============================================================
+// 预制案例
+// ============================================================
+const PRESETS = [
+  {
+    name: '💃 女孩跳舞',
+    description: '女孩在舞台上优雅跳舞，带参考图，16:9 横屏',
+    prompt: '一个穿着红色连衣裙的女孩 (@图片1) 在灯光璀璨的舞台中央优雅地旋转跳舞，裙摆飞扬',
+    modelConfig: { model: 'Seedance 2.0 Fast', referenceMode: '全能参考', aspectRatio: '16:9', duration: '4s' },
+    tags: ['portrait', 'dance', '带图'],
+    useTestImage: true,
+    testImageColors: [[200, 100, 100]],
+  },
+  {
+    name: '🏔️ 山脉日出',
+    description: '壮丽山脉延时摄影，带参考图，云海翻涌',
+    prompt: '壮丽的山脉日出延时摄影 (@图片1) 金色阳光洒满山谷 云海翻涌光影变幻',
+    modelConfig: { model: 'Seedance 2.0 Fast', referenceMode: '全能参考', aspectRatio: '16:9', duration: '4s' },
+    tags: ['landscape', 'nature', '带图'],
+    useTestImage: true,
+    testImageColors: [[80, 130, 200]],
+  },
+  {
+    name: '📦 产品展示',
+    description: '产品360度旋转展示，带参考图，1:1正方形',
+    prompt: '精致的产品在纯白背景上缓慢360度旋转展示 (@图片1) 光影柔和细节清晰',
+    modelConfig: { model: 'Seedance 2.0 Fast', referenceMode: '全能参考', aspectRatio: '1:1', duration: '4s' },
+    tags: ['product', 'commercial', '带图'],
+    useTestImage: true,
+    testImageColors: [[240, 240, 240]],
+  },
+  {
+    name: '🌊 海浪沙滩',
+    description: '海浪拍打沙滩，带参考图，竖屏视频',
+    prompt: '蔚蓝海浪轻柔地拍打金色沙滩 (@图片1) 泡沫退去留下水渍 阳光在水面上闪烁',
+    modelConfig: { model: 'Seedance 2.0 Fast', referenceMode: '全能参考', aspectRatio: '9:16', duration: '4s' },
+    tags: ['nature', 'ocean', '带图'],
+    useTestImage: true,
+    testImageColors: [[40, 120, 200]],
+  },
+  {
+    name: '🐱 猫咪特写',
+    description: '可爱猫咪转头看镜头，带参考图',
+    prompt: '一只毛茸茸的橘猫 (@图片1) 慢慢转头看向镜头 眨了眨大眼睛 背景虚化',
+    modelConfig: { model: 'Seedance 2.0 Fast', referenceMode: '全能参考', aspectRatio: '1:1', duration: '4s' },
+    tags: ['animal', 'cute', '带图'],
+    useTestImage: true,
+    testImageColors: [[220, 160, 60]],
+  },
+  {
+    name: '🏙️ 城市夜景',
+    description: '城市霓虹灯夜景延时，带参考图',
+    prompt: '繁华都市夜景延时摄影 (@图片1) 霓虹灯闪烁 车流形成光轨 高楼大厦灯火辉煌',
+    modelConfig: { model: 'Seedance 2.0 Fast', referenceMode: '全能参考', aspectRatio: '21:9', duration: '4s' },
+    tags: ['city', 'night', '带图'],
+    useTestImage: true,
+    testImageColors: [[30, 30, 80]],
+  },
+];
+
+// ============================================================
+// 状态
+// ============================================================
+let uploadedFiles = []; // { name, base64, type }
+
+// 清理文件名中的括号，避免干扰 (@xxx) mention 语法
+function sanitizeFileName(name) {
+  return name.replace(/[()\uff08\uff09\[\]\u3010\u3011{}\uff5b\uff5d]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+}
+
+// ============================================================
+// DOM
+// ============================================================
+const taskDesc = document.getElementById('taskDesc');
+const taskPrompt = document.getElementById('taskPrompt');
+const cfgModel = document.getElementById('cfgModel');
+const cfgRefMode = document.getElementById('cfgRefMode');
+const cfgRatio = document.getElementById('cfgRatio');
+const cfgDuration = document.getElementById('cfgDuration');
+const realSubmitCb = document.getElementById('realSubmit');
+const realSubmitRow = document.getElementById('realSubmitRow');
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+const filePreview = document.getElementById('filePreview');
+const btnPush = document.getElementById('btnPush');
+const presetGrid = document.getElementById('presetGrid');
+const logArea = document.getElementById('logArea');
+const taskTableBody = document.getElementById('taskTableBody');
+const btnRefreshTasks = document.getElementById('btnRefreshTasks');
+const sseDot = document.getElementById('sseDot');
+const sseStatusText = document.getElementById('sseStatusText');
+const taskCountBadge = document.getElementById('taskCountBadge');
+const sseClientList = document.getElementById('sseClientList');
+
+// ============================================================
+// 真实提交警告样式
+// ============================================================
+// ============================================================
+// 快捷插入
+// ============================================================
+const qiCustom = document.getElementById('qiCustom');
+const qiCustomBtn = document.getElementById('qiCustomBtn');
+const qiButtons = document.getElementById('qiButtons');
+const qiHint = document.getElementById('qiHint');
+
+function insertAtCursor(text) {
+  taskPrompt.focus();
+  const start = taskPrompt.selectionStart;
+  const end = taskPrompt.selectionEnd;
+  const before = taskPrompt.value.substring(0, start);
+  const after = taskPrompt.value.substring(end);
+  const needSpaceBefore = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n');
+  const needSpaceAfter = after.length > 0 && !after.startsWith(' ') && !after.startsWith('\n');
+  const insert = (needSpaceBefore ? ' ' : '') + text + (needSpaceAfter ? ' ' : '');
+  taskPrompt.value = before + insert + after;
+  const newPos = start + insert.length;
+  taskPrompt.setSelectionRange(newPos, newPos);
+  taskPrompt.focus();
+}
+
+function updateQuickInsert() {
+  qiButtons.innerHTML = '';
+  if (uploadedFiles.length === 0) {
+    qiHint.style.display = '';
+    return;
+  }
+  qiHint.style.display = 'none';
+  uploadedFiles.forEach((f) => {
+    const btn = document.createElement('button');
+    btn.className = 'qi-btn';
+    const tag = `(@${f.fileName})`;
+    btn.textContent = tag;
+    btn.title = `插入 ${tag}`;
+    btn.dataset.insert = tag;
+    qiButtons.appendChild(btn);
+  });
+}
+
+document.getElementById('quickInsertRow').addEventListener('click', (e) => {
+  const btn = e.target.closest('.qi-btn');
+  if (!btn) return;
+  if (btn.id === 'qiCustomBtn') {
+    const name = qiCustom.value.trim();
+    if (!name) { qiCustom.focus(); return; }
+    insertAtCursor(`(@${name})`);
+    qiCustom.value = '';
+  } else if (btn.dataset.insert) {
+    insertAtCursor(btn.dataset.insert);
+  }
+});
+
+qiCustom.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    qiCustomBtn.click();
+  }
+});
+
+// ============================================================
+// 真实提交警告样式
+// ============================================================
+realSubmitCb.addEventListener('change', () => {
+  if (realSubmitCb.checked) {
+    realSubmitRow.classList.add('warn');
+    realSubmitRow.querySelector('.cb-hint').textContent = '⚠️ 将真实提交!';
+  } else {
+    realSubmitRow.classList.remove('warn');
+    realSubmitRow.querySelector('.cb-hint').textContent = '默认模拟';
+  }
+});
+
+// ============================================================
+// 文件上传
+// ============================================================
+uploadArea.addEventListener('click', () => fileInput.click());
+uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.style.borderColor = '#3a7bd5'; });
+uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor = '#1e3a5f'; });
+uploadArea.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadArea.style.borderColor = '#1e3a5f';
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', (e) => {
+  handleFiles(e.target.files);
+  fileInput.value = '';
+});
+
+function handleFiles(files) {
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      uploadedFiles.push({
+        fileName: sanitizeFileName(file.name),
+        base64: e.target.result,
+        fileType: file.type,
+      });
+      renderFilePreview();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function renderFilePreview() {
+  filePreview.innerHTML = '';
+  uploadedFiles.forEach((f, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'file-thumb';
+    thumb.innerHTML = `
+      <img src="${f.base64}" alt="${f.fileName}">
+      <button class="remove" data-idx="${i}" title="移除">&times;</button>
+    `;
+    filePreview.appendChild(thumb);
+  });
+  filePreview.querySelectorAll('.remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      uploadedFiles.splice(parseInt(btn.dataset.idx), 1);
+      renderFilePreview();
+    });
+  });
+  updateQuickInsert();
+}
+
+// ============================================================
+// 预制案例渲染
+// ============================================================
+function renderPresets() {
+  presetGrid.innerHTML = '';
+  PRESETS.forEach((preset, idx) => {
+    const card = document.createElement('div');
+    card.className = 'preset-card';
+    card.innerHTML = `
+      <div class="preset-name">${preset.name}</div>
+      <div class="preset-desc">${preset.description}</div>
+      <div class="preset-tags">
+        ${preset.tags.map(t => `<span class="tag">${t}</span>`).join('')}
+        <span class="tag">${preset.modelConfig.aspectRatio}</span>
+        <span class="tag">${preset.modelConfig.duration}</span>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:5px;">
+        <button class="btn-sm" data-action="fill" data-idx="${idx}">📝 填充</button>
+        <button class="btn-sm" data-action="push" data-idx="${idx}">📤 推送</button>
+      </div>
+    `;
+    presetGrid.appendChild(card);
+  });
+
+  presetGrid.querySelectorAll('[data-action="fill"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fillFromPreset(parseInt(btn.dataset.idx));
+    });
+  });
+
+  presetGrid.querySelectorAll('[data-action="push"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pushPreset(parseInt(btn.dataset.idx));
+    });
+  });
+}
+
+function fillFromPreset(idx) {
+  const p = PRESETS[idx];
+  taskDesc.value = p.description;
+  taskPrompt.value = p.prompt;
+  cfgModel.value = p.modelConfig.model;
+  cfgRefMode.value = p.modelConfig.referenceMode;
+  cfgRatio.value = p.modelConfig.aspectRatio;
+  cfgDuration.value = p.modelConfig.duration;
+  // 生成测试图片并填充到上传区
+  uploadedFiles = [];
+  if (p.useTestImage && p.testImageColors) {
+    p.testImageColors.forEach((color, i) => {
+      const base64 = generateTestImage(color[0], color[1], color[2]);
+      uploadedFiles.push({
+        fileName: `图片${i + 1}`,
+        base64,
+        fileType: 'image/png',
+      });
+    });
+  }
+  renderFilePreview();
+  addLog(`📝 已填充预制案例: ${p.name} (${uploadedFiles.length} 张参考图)`);
+}
+
+function generateTestImage(r, g, b, size = 512) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = `rgb(${r},${g},${b})`;
+  ctx.fillRect(0, 0, size, size);
+  // 画个十字标记表示测试图
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(size / 2, 0);
+  ctx.lineTo(size / 2, size);
+  ctx.moveTo(0, size / 2);
+  ctx.lineTo(size, size / 2);
+  ctx.stroke();
+  // 标注颜色值
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.font = '24px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`TEST (${r},${g},${b})`, size / 2, size / 2 + 8);
+  return canvas.toDataURL('image/png');
+}
+
+async function pushPreset(idx) {
+  const p = PRESETS[idx];
+
+  // 根据 testImageColors 生成测试图片
+  const refFiles = [];
+  if (p.useTestImage && p.testImageColors) {
+    p.testImageColors.forEach((color, i) => {
+      const base64 = generateTestImage(color[0], color[1], color[2]);
+      refFiles.push({
+        fileName: `图片${i + 1}`,
+        base64,
+        fileType: 'image/png',
+      });
+    });
+  }
+
+  const task = {
+    description: p.description,
+    prompt: p.prompt,
+    tags: p.tags,
+    modelConfig: p.modelConfig,
+    referenceFiles: refFiles,
+    realSubmit: realSubmitCb.checked,
+  };
+
+  try {
+    const resp = await fetch(`${API}/api/tasks/push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(task),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      addLog(`✅ 预制案例 "${p.name}" 已推送: ${data.taskCodes.join(', ')}`, 'success');
+      refreshTaskList();
+    } else {
+      addLog(`❌ 推送失败: ${data.error}`, 'error');
+    }
+  } catch (err) {
+    addLog(`❌ 推送异常: ${err.message}`, 'error');
+  }
+}
+
+// ============================================================
+// 推送任务
+// ============================================================
+btnPush.addEventListener('click', async () => {
+  const prompt = taskPrompt.value.trim();
+  if (!prompt && uploadedFiles.length === 0) {
+    addLog('⚠️ 请输入提示词或上传参考图', 'error');
+    return;
+  }
+
+  btnPush.disabled = true;
+  btnPush.textContent = '⏳ 推送中...';
+
+  const task = {
+    description: taskDesc.value.trim(),
+    prompt,
+    modelConfig: {
+      model: cfgModel.value,
+      referenceMode: cfgRefMode.value,
+      aspectRatio: cfgRatio.value,
+      duration: cfgDuration.value,
+    },
+    referenceFiles: uploadedFiles.map(f => ({
+      fileName: f.fileName,
+      base64: f.base64,
+      fileType: f.fileType,
+    })),
+    realSubmit: realSubmitCb.checked,
+  };
+
+  try {
+    const resp = await fetch(`${API}/api/tasks/push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(task),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      addLog(`✅ 任务已推送: ${data.taskCodes.join(', ')} (通知 ${data.notified} 个客户端)`, 'success');
+      refreshTaskList();
+      // 清空表单
+      taskDesc.value = '';
+      taskPrompt.value = '';
+      uploadedFiles = [];
+      renderFilePreview();
+    } else {
+      addLog(`❌ 推送失败: ${data.error}`, 'error');
+    }
+  } catch (err) {
+    addLog(`❌ 推送异常: ${err.message}`, 'error');
+  }
+
+  btnPush.disabled = false;
+  btnPush.textContent = '📤 推送任务';
+});
+
+// ============================================================
+// 任务列表
+// ============================================================
+const STATUS_LABELS = {
+  pending: '待处理',
+  occupied: '已占用',
+  acked: '已确认',
+  configuring: '⚙️ 配置中',
+  running: '执行中',
+  generating: '🎬 生成中',
+  uploading: '📤 上传标清',
+  upscaling: '🔺 提升中',
+  uploading_hd: '📤 上传高清',
+  completed: '✅ 完成',
+  failed: '❌ 失败',
+};
+
+async function refreshTaskList() {
+  try {
+    const resp = await fetch(`${API}/api/tasks`);
+    const data = await resp.json();
+    taskCountBadge.textContent = `${data.total} 任务`;
+
+    if (data.tasks.length === 0) {
+      taskTableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#555;">暂无任务</td></tr>';
+      return;
+    }
+
+    taskTableBody.innerHTML = data.tasks.map(t => `
+      <tr>
+        <td data-label="编号"><code style="color:#a8d8ea;">${t.taskCode}</code></td>
+        <td data-label="描述">${escapeHtml(t.description || '-')}</td>
+        <td data-label="提示词" title="${escapeHtml(t.prompt)}">${escapeHtml((t.prompt || '-').substring(0, 30))}${t.prompt && t.prompt.length > 30 ? '...' : ''}</td>
+        <td data-label="图片">${t.referenceFileCount || 0} 张</td>
+        <td data-label="状态"><span class="status-badge status-${t.status}">${STATUS_LABELS[t.status] || t.status}</span></td>
+        <td data-label="真实提交">${t.realSubmit ? '<span style="color:#e94560;">✅ 是</span>' : '<span style="color:#555;">否</span>'}</td>
+        <td data-label="占用者" style="font-size:10px;color:#555;">${t.occupiedBy ? t.occupiedBy.substring(0, 16) : '-'}</td>
+        <td data-label="时间" style="font-size:10px;">${new Date(t.createdAt).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    addLog(`❌ 刷新任务列表失败: ${err.message}`, 'error');
+  }
+}
+
+btnRefreshTasks.addEventListener('click', refreshTaskList);
+
+// ============================================================
+// SSE 状态监听
+// ============================================================
+function updateSSEStatus() {
+  fetch(`${API}/`)
+    .then(r => r.json())
+    .then(data => {
+      const count = data.sseClients || 0;
+      sseDot.className = count > 0 ? 'sse-dot on' : 'sse-dot';
+      sseStatusText.textContent = `SSE: ${count} 客户端`;
+      sseClientList.textContent = count > 0 ? `${count} 个扩展客户端在线` : '暂无连接';
+    })
+    .catch(() => {});
+}
+
+// ============================================================
+// 日志
+// ============================================================
+function addLog(msg, type) {
+  const time = new Date().toLocaleTimeString('zh-CN');
+  const cls = type === 'success' ? 'log-success' : type === 'error' ? 'log-error' : '';
+  logArea.innerHTML += `<div class="${cls}">[${time}] ${escapeHtml(msg)}</div>`;
+  logArea.scrollTop = logArea.scrollHeight;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ============================================================
+// 初始化
+// ============================================================
+renderPresets();
+refreshTaskList();
+updateSSEStatus();
+setInterval(updateSSEStatus, 5000);
+setInterval(refreshTaskList, 10000);
+addLog('🚀 管理页面已加载');
+</script>
+</body>
+</html>

@@ -9,6 +9,50 @@
   // ============================================================
   let isProcessing = false;
   let currentTaskIndex = -1;
+  let ratioWatcherTimer = null;
+  let ratioWatcherApplying = false;
+
+  // ============================================================
+  // 比例监控: 后台轮询, 检测到比例被 React 重置时自动恢复
+  // ============================================================
+  function startRatioWatcher(targetRatio, duration = 20000) {
+    stopRatioWatcher();
+    if (!targetRatio || targetRatio === '1:1') return; // 默认值不需要监控
+
+    const startTime = Date.now();
+    console.log(`[Seedance批量] 🔒 启动比例监控: "${targetRatio}" (${duration / 1000}秒)`);
+
+    ratioWatcherTimer = setInterval(async () => {
+      if (ratioWatcherApplying) return;
+      if (Date.now() - startTime > duration) {
+        stopRatioWatcher();
+        return;
+      }
+
+      const toolbar = findToolbar();
+      const ratioBtn = toolbar?.querySelector('button[class*="toolbar-button"]');
+      const currentRatio = ratioBtn?.textContent?.trim();
+
+      if (currentRatio && currentRatio !== targetRatio) {
+        ratioWatcherApplying = true;
+        console.log(`[Seedance批量] 🔒 比例监控: 检测到 "${currentRatio}" → 恢复 "${targetRatio}"`);
+        try {
+          await setAspectRatio(targetRatio);
+        } catch (e) {
+          console.error('[Seedance批量] 比例监控: 恢复失败:', e);
+        }
+        ratioWatcherApplying = false;
+      }
+    }, 1500);
+  }
+
+  function stopRatioWatcher() {
+    if (ratioWatcherTimer) {
+      clearInterval(ratioWatcherTimer);
+      ratioWatcherTimer = null;
+      console.log('[Seedance批量] 🔓 比例监控已停止');
+    }
+  }
 
   // ============================================================
   // 消息监听
@@ -81,6 +125,60 @@
         .catch(err => sendResponse({ success: false, error: err.message }));
       return true;
     }
+
+    if (msg.action === 'clickGenerate') {
+      clickGenerate()
+        .then(detail => sendResponse({ success: true, detail: detail || 'ok' }))
+        .catch(err => sendResponse({ success: false, error: err.message }));
+      return true;
+    }
+
+    if (msg.action === 'findVideoByTaskCode') {
+      findVideoByTaskCode(msg.taskCode || '')
+        .then(result => sendResponse({ success: true, ...result }))
+        .catch(err => sendResponse({ success: false, error: err.message }));
+      return true;
+    }
+
+    if (msg.action === 'triggerNativeDownload') {
+      triggerNativeDownload(msg.taskCode || '', msg.preferHD !== false)
+        .then(result => sendResponse({ success: true, ...result }))
+        .catch(err => sendResponse({ success: false, error: err.message }));
+      return true;
+    }
+
+    if (msg.action === 'triggerUpscale') {
+      triggerUpscale(msg.taskCode || '')
+        .then(result => sendResponse({ success: true, ...result }))
+        .catch(err => sendResponse({ success: false, error: err.message }));
+      return true;
+    }
+
+    if (msg.action === 'downloadVideoFile') {
+      downloadVideoFile(msg.url || '', msg.filename || 'video.mp4')
+        .then(result => sendResponse({ success: true, ...result }))
+        .catch(err => sendResponse({ success: false, error: err.message }));
+      return true;
+    }
+
+    if (msg.action === 'captureAndUpload') {
+      captureAndUploadVideo(msg.taskCode || '', msg.serverUrl || '', msg.quality || '')
+        .then(result => sendResponse({ success: true, ...result }))
+        .catch(err => sendResponse({ success: false, error: err.message }));
+      return true;
+    }
+
+    if (msg.action === 'lockRatio') {
+      startRatioWatcher(msg.ratio, msg.duration || 20000);
+      sendResponse({ success: true });
+      return false;
+    }
+
+    if (msg.action === 'unlockRatio') {
+      stopRatioWatcher();
+      sendResponse({ success: true });
+      return false;
+    }
   });
 
   // ============================================================
@@ -151,6 +249,8 @@
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
+
+
 
   // ============================================================
   // Helper: 等待元素出现
@@ -435,37 +535,67 @@
   // Helper: 查找生成/提交按钮
   // ============================================================
   function findSubmitButton() {
-    // 方法1: class 包含 submit-button
-    const submitBtn = document.querySelector('[class*="submit-button"]:not([class*="collapsed-WjKggt"])');
-    if (submitBtn && submitBtn.offsetParent !== null) return submitBtn;
+    // 排除我们自己的抽屉容器
+    const exclude = '#seedance-drawer-container';
 
-    // 方法2: 在 submit-button-container 中找按钮
-    const container = document.querySelector('[class*="collapsed-submit-button-container"]:not([class*="collapsed-WjKggt"])');
-    if (container) {
-      const btn = container.querySelector('button');
-      if (btn) return btn;
-    }
-
-    // 方法3: 找所有 submit 相关按钮
-    const allSubmit = document.querySelectorAll('button[class*="submit"]');
-    for (const btn of allSubmit) {
-      const rect = btn.getBoundingClientRect();
-      if (rect.width > 20 && rect.height > 20 && btn.offsetParent !== null) {
+    // 方法1: 找 submit-button class 的 BUTTON 元素 (注意排除 container div)
+    const submitBtns = document.querySelectorAll('button[class*="submit-button"]');
+    for (const btn of submitBtns) {
+      if (btn.closest(exclude)) continue;
+      if (btn.offsetParent !== null) {
+        console.log('[Seedance批量] findSubmitButton: 方法1命中 button[class*=submit-button]', btn.className.substring(0, 80));
         return btn;
       }
     }
 
-    // 方法4: 按文本查找
-    const textBtn = findByText('button, div[role="button"]', '生成')
-      || findByText('button, div[role="button"]', '立即生成');
-    if (textBtn) {
-      let btn = textBtn;
-      while (btn && btn.tagName !== 'BUTTON' && !btn.getAttribute('role')) {
-        btn = btn.parentElement;
+    // 方法2: 在 submit-button-container 中找 button
+    const containers = document.querySelectorAll('[class*="submit-button-container"]');
+    for (const container of containers) {
+      if (container.closest(exclude)) continue;
+      const btn = container.querySelector('button');
+      if (btn && btn.offsetParent !== null) {
+        console.log('[Seedance批量] findSubmitButton: 方法2命中 container>button', btn.className.substring(0, 80));
+        return btn;
       }
-      return btn || textBtn;
     }
 
+    // 方法3: lv-btn-primary 在底部工具栏区域 (y > 600)
+    const primaryBtns = document.querySelectorAll('button.lv-btn-primary');
+    for (const btn of primaryBtns) {
+      if (btn.closest(exclude)) continue;
+      const rect = btn.getBoundingClientRect();
+      if (rect.top > 600 && rect.width > 20 && rect.height > 20 && btn.offsetParent !== null) {
+        console.log('[Seedance批量] findSubmitButton: 方法3命中 lv-btn-primary bottom', btn.className.substring(0, 80), `y=${Math.round(rect.top)}`);
+        return btn;
+      }
+    }
+
+    // 方法4: 找所有 submit 相关的 button
+    const allSubmit = document.querySelectorAll('button[class*="submit"]');
+    for (const btn of allSubmit) {
+      if (btn.closest(exclude)) continue;
+      const rect = btn.getBoundingClientRect();
+      if (rect.width > 20 && rect.height > 20 && btn.offsetParent !== null) {
+        console.log('[Seedance批量] findSubmitButton: 方法4命中 button[class*=submit]', btn.className.substring(0, 80));
+        return btn;
+      }
+    }
+
+    // 方法5: 按文本查找 (限定 bottom 区域，排除导航栏的"生成")
+    const candidates = document.querySelectorAll('button, div[role="button"]');
+    for (const el of candidates) {
+      if (el.closest(exclude)) continue;
+      const text = el.textContent.trim();
+      if (text === '生成' || text === '立即生成' || text.includes('生成视频')) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 40 && rect.height > 20 && rect.top > 200) {
+          console.log('[Seedance批量] findSubmitButton: 方法5命中 text', `"${text}" y=${Math.round(rect.top)}`);
+          return el;
+        }
+      }
+    }
+
+    console.warn('[Seedance批量] findSubmitButton: 所有方法均未匹配');
     return null;
   }
 
@@ -737,19 +867,24 @@
         eventName: eventName,
       }, '*');
 
-      // 全局超时 (MAIN world 中的 setTimeout 链可能需要 ~8s)
+      // 全局超时 (MAIN world 中的 setTimeout 链可能需要 ~12s)
       const timeoutId = setTimeout(() => {
         window.removeEventListener('message', handler);
-        console.warn('[Seedance批量] [Mention] 超时 (15s)');
-        resolve({ success: false, error: 'timeout (15s)' });
-      }, 15000);
+        console.warn('[Seedance批量] [Mention] 超时 (25s)');
+        resolve({ success: false, error: 'timeout (25s)' });
+      }, 25000);
     });
   }
 
   // ============================================================
   // 填写提示词（支持 @mention 引用）
-  // 提示词中 "@XXX" 会通过 ProseMirror API 直接插入 reference-mention-tag 节点
-  // 例如: "一个女孩 (@图片1) 在跳舞" → 文本"一个女孩 " + mention(图片1的UUID) + 文本" 在跳舞"
+  // 用户提示词中 "(@filename.ext)" 会被转换为对应的 @图片N/@视频N mention 节点
+  // 流程:
+  //   1. 根据上传文件列表, 建立 filename → 图片N/视频N 的映射
+  //   2. 解析提示词中的 (@xxx) 引用
+  //   3. 将 filename 查找映射表, 转换为 "图片N" 标签
+  //   4. 发送给 MAIN world, 由 MAIN world 触发 @ 弹窗读取 UUID
+  //   5. MAIN world 按 "图片N" 标签匹配弹窗选项, 获取 UUID, 创建 mention 节点
   // ============================================================
   async function setPromptWithMentions(promptRaw, fileList) {
     if (!promptRaw) return;
@@ -760,37 +895,52 @@
       return;
     }
 
-    console.log(`[Seedance批量] [Mention] 找到编辑器: tag=${editor.tagName}`);
     console.log(`[Seedance批量] [Mention] 原始提示词: "${promptRaw.substring(0, 120)}"`);
 
     // ----------------------------------------------------------------
-    // 构建文件名 → 弹窗序号的映射
-    // reference-mention-tag 的 id 属性是 UUID，需从 @ 弹窗的 React Fiber 中读取
+    // Step 1: 构建 filename → "图片N"/"视频N" 的映射
     // ----------------------------------------------------------------
-    const fileNameToIndex = new Map();
+    function sanitizeFileName(name) {
+      return name.replace(/[()（）\[\]【】{}｛｝]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    }
+
+    // fileNameToLabel: 各种可能的文件名形式 → 对应的 "图片N"/"视频N"
+    const fileNameToLabel = new Map();
     let imgCounter = 0;
     let vidCounter = 0;
+
     if (fileList && fileList.length > 0) {
       for (let i = 0; i < fileList.length; i++) {
         const fd = fileList[i];
-        const fname = fd.name;
+        const rawName = fd.name;
+        const fname = sanitizeFileName(rawName);
         const isVideo = fd.type && fd.type.startsWith('video/');
         const label = isVideo ? `视频${++vidCounter}` : `图片${++imgCounter}`;
 
-        fileNameToIndex.set(fname, i);
-        const nameNoExt = fname.replace(/\.[^.]+$/, '');
-        if (nameNoExt !== fname) fileNameToIndex.set(nameNoExt, i);
-        fileNameToIndex.set(label, i);
+        // 注册各种可能的名称形式, 全部指向同一个 label
+        const variants = new Set([rawName, fname]);
+        // 不含扩展名的形式
+        const rawNoExt = rawName.replace(/\.[^.]+$/, '');
+        const fnameNoExt = fname.replace(/\.[^.]+$/, '');
+        if (rawNoExt !== rawName) variants.add(rawNoExt);
+        if (fnameNoExt !== fname) variants.add(fnameNoExt);
+        // label 本身也可以直接引用
+        variants.add(label);
 
-        console.log(`[Seedance批量] [Mention] 文件[${i}]: "${fname}" → 标签 "${label}" (index=${i})`);
+        for (const v of variants) {
+          fileNameToLabel.set(v, label);
+          fileNameToLabel.set(v.toLowerCase(), label); // 大小写不敏感
+        }
+
+        console.log(`[Seedance批量] [Mention] 文件[${i}]: "${rawName}" → "${label}"`);
       }
     }
 
     // ----------------------------------------------------------------
-    // 解析提示词中的 @mention
-    // 支持: @XXX, (@XXX), （@XXX）
+    // Step 2: 解析提示词中的 @mention
+    // 支持: (@xxx), （@xxx）, @xxx
     // ----------------------------------------------------------------
-    const mentionRegex = /[（(]@(\S+?)[）)]|@(\S+)/g;
+    const mentionRegex = /[（(]@(.+?)[）)]|@([^\s，。！？；：、,.!?;:()（）【】\[\]]+)/g;
     const segments = [];
     let lastIndex = 0;
     let match;
@@ -807,7 +957,7 @@
     }
 
     console.log(`[Seedance批量] [Mention] 解析得到 ${segments.length} 个段落:`);
-    segments.forEach((s, i) => console.log(`  [${i}] ${s.type}: "${s.value.substring(0, 40)}"`));
+    segments.forEach((s, i) => console.log(`  [${i}] ${s.type}: "${s.value.substring(0, 60)}"`));
 
     // 如果没有 mention，直接用普通 setPrompt
     if (!segments.some(s => s.type === 'mention')) {
@@ -817,34 +967,31 @@
     }
 
     // ----------------------------------------------------------------
-    // 将 mention value 解析为 reference index
+    // Step 3: 将每个 mention 的 filename 转换为 "图片N" 标签
     // ----------------------------------------------------------------
-    let mentionCounter = 0;
     const resolvedSegments = segments.map(seg => {
       if (seg.type !== 'mention') return seg;
-      let fileIndex = fileNameToIndex.get(seg.value);
-      if (fileIndex === undefined) {
-        for (const [key, idx] of fileNameToIndex) {
-          if (key.toLowerCase() === seg.value.toLowerCase()) {
-            fileIndex = idx;
-            break;
-          }
+
+      // 查找文件名对应的标签
+      let label = fileNameToLabel.get(seg.value) || fileNameToLabel.get(seg.value.toLowerCase());
+
+      if (!label) {
+        // 如果用户直接写了 @图片1 或 @视频1, 直接使用
+        if (/^(图片|视频)\d+$/.test(seg.value)) {
+          label = seg.value;
+        } else {
+          // 未找到映射, 不处理为 mention, 保留原文
+          console.warn(`[Seedance批量] [Mention] "${seg.value}" 未在文件列表中找到, 保留原文不处理`);
+          return { type: 'text', value: `(@${seg.value})` };
         }
       }
-      if (fileIndex === undefined) {
-        fileIndex = mentionCounter;
-        console.log(`[Seedance批量] [Mention] "${seg.value}" 未在映射中找到，按顺序使用索引 ${fileIndex}`);
-      } else {
-        console.log(`[Seedance批量] [Mention] "${seg.value}" → 文件索引 ${fileIndex}`);
-      }
-      mentionCounter++;
-      return { type: 'mention', value: seg.value, fileIndex };
+
+      console.log(`[Seedance批量] [Mention] (@${seg.value}) → @${label}`);
+      return { type: 'mention', value: seg.value, label: label };
     });
 
     // ----------------------------------------------------------------
-    // 从 @ 弹窗读取每个上传文件的真实 UUID
-    // mention 的 id 属性必须是网站分配的 UUID，不能用简单的 0-based 索引
-    // 然后直接在 MAIN world 中构建完整文档 (全部在一个脚本中完成)
+    // Step 4: 发送给 MAIN world, 由它触发 @ 弹窗并构建文档
     // ----------------------------------------------------------------
     const result = await insertDocWithMentionUUIDs(resolvedSegments);
 
@@ -855,8 +1002,7 @@
     } else {
       console.warn(`[Seedance批量] [Mention] ⚠️ 插入失败: ${result.error}`);
       console.log('[Seedance批量] [Mention] 回退: 使用普通 setPrompt (不含 mention 标签)');
-      // 回退: 去掉 @mention 标记, 直接填文本
-      const plainText = promptRaw.replace(/[（(]@(\S+?)[）)]/g, '$1').replace(/@(\S+)/g, '$1');
+      const plainText = promptRaw.replace(/[（(]@(\S+?)[）)]/g, '$1').replace(/@([^\s，。！？；：、,.!?;:()（）【】\[\]]+)/g, '$1');
       await setPrompt(plainText);
     }
   }
@@ -867,7 +1013,7 @@
   // prompt: 提示词文本（支持 @mention）
   // ============================================================
   async function doGenerate(msg) {
-    const { files, fileData, prompt } = msg;
+    const { files, fileData, prompt, aspectRatio } = msg;
 
     // 兼容旧的单文件调用方式
     const fileList = files || (fileData ? [fileData] : []);
@@ -883,16 +1029,31 @@
       await ensureVideoGenerationMode();
       await sleep(500);
 
+      // 保存当前比例 (上传前), 用于后续恢复
+      const toolbarBefore = findToolbar();
+      const ratioBtnBefore = toolbarBefore?.querySelector('button[class*="toolbar-button"]');
+      const savedRatio = aspectRatio || ratioBtnBefore?.textContent?.trim();
+      console.log(`[Seedance批量] [doGenerate] 当前比例: "${savedRatio}"`);
+
+      // 启动比例监控 (后台轮询, 上传导致 React 重渲染时自动恢复比例)
+      if (savedRatio && savedRatio !== '1:1') {
+        startRatioWatcher(savedRatio, 30000);
+      }
+
       // Step 1: 清除所有已上传的参考图
       console.log('[Seedance批量] [doGenerate] Step 1: 清除所有已上传的参考图');
       await clearAllReferenceImages();
+      // 等待页面刷新UI (清除后可能重新渲染上传区域)
       await sleep(500);
 
-      // Step 2: 一次性上传所有参考文件
+      // Step 2: 上传所有参考文件 (逐个到各自槽位)
       if (fileList.length > 0) {
-        console.log(`[Seedance批量] [doGenerate] Step 2: 一次性上传 ${fileList.length} 个文件`);
+        console.log(`[Seedance批量] [doGenerate] Step 2: 上传 ${fileList.length} 个文件`);
         await uploadAllReferenceFiles(fileList);
         console.log(`[Seedance批量] [doGenerate] Step 2 完成: 已上传 ${fileList.length} 个文件`);
+        // 等待服务器处理完上传的文件 (生成 UUID 等), 否则 @ 弹窗中可能找不到引用
+        console.log('[Seedance批量] [doGenerate] 等待上传处理完成...');
+        await sleep(1500);
       } else {
         console.log('[Seedance批量] [doGenerate] Step 2: 无参考文件，跳过');
       }
@@ -913,6 +1074,7 @@
       }
 
       // 不点击生成按钮，仅上传并填写提示词
+      // 比例恢复由 ratioWatcher 后台处理 (持续 30 秒)
       console.log(`[Seedance批量] [doGenerate] ✅ 全部完成: ${fileList.length} 个文件已上传, 提示词已填写`);
     } finally {
       isProcessing = false;
@@ -921,85 +1083,71 @@
   }
 
   // ============================================================
-  // 一次性上传所有参考文件 (通过一个 DataTransfer 包含多个 File)
+  // 上传所有参考文件
+  // 策略: 通过 postMessage 委托给 MAIN world (mention-main-world.js)
+  // 因为 React 的 __reactProps$/onChange 只在 MAIN world 可访问
   // ============================================================
   async function uploadAllReferenceFiles(fileList) {
-    // 将所有 base64 文件转为 File 对象
-    const allFiles = fileList.map(fd => base64ToFile(fd.data, fd.name, fd.type));
-    console.log(`[Seedance批量] 准备一次性上传 ${allFiles.length} 个文件: ${allFiles.map(f => f.name).join(', ')}`);
+    console.log(`[Seedance批量] 准备上传 ${fileList.length} 个文件: ${fileList.map(f => f.name).join(', ')}`);
 
-    // 尝试点击"添加参考图"或相关按钮
-    const refButtonTexts = ['添加参考图', '上传图片', '添加参考', '上传参考图', '首帧', '尾帧', '添加图片'];
-    let clickedRefBtn = false;
-    for (const text of refButtonTexts) {
-      const btn = findByText('span, div, button, p, a', text);
-      if (btn && btn.offsetParent !== null) {
-        console.log(`[Seedance批量] 点击参考图按钮: "${text}"`);
-        simulateClick(btn);
-        clickedRefBtn = true;
-        await sleep(800);
-        break;
-      }
-    }
-    if (!clickedRefBtn) {
-      console.log('[Seedance批量] 未找到"添加参考图"按钮，直接查找 file input');
-    }
+    // --- 诊断: 输出页面上传控件信息 ---
+    const diagInputs = document.querySelectorAll('input[type="file"]');
+    console.log(`[Seedance批量] 🔍 诊断: 页面共有 ${diagInputs.length} 个 file input`);
+    diagInputs.forEach((inp, i) => {
+      const refP = inp.closest('[class*="reference-upload"]');
+      const upP = inp.closest('[class*="upload"]');
+      const parent = refP || upP || inp.parentElement;
+      const pRect = parent?.getBoundingClientRect();
+      console.log(`[Seedance批量]   input[${i}]: accept="${inp.accept}", refParent=${!!refP}, uploadParent=${!!upP}, parentVisible=${pRect ? (pRect.width > 0 && pRect.height > 0) : false}`);
+    });
 
-    // 通过 file input 上传
-    const fileInput = findUploadTarget();
-    if (fileInput) {
-      const dt = new DataTransfer();
-      for (const file of allFiles) {
-        dt.items.add(file);
-      }
+    // 准备 base64 文件数据 (提取纯 base64, 去掉 data:xxx;base64, 前缀)
+    const filesData = fileList.map(fd => {
+      const base64Raw = fd.data.includes(',') ? fd.data.split(',')[1] : fd.data;
+      return {
+        base64: base64Raw,
+        name: fd.name,
+        mimeType: fd.type || 'image/png'
+      };
+    });
 
-      // 使用 Object.getOwnPropertyDescriptor 设置 files (兼容 React/框架)
-      const nativeInputFileSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype, 'files'
-      )?.set;
-      if (nativeInputFileSetter) {
-        nativeInputFileSetter.call(fileInput, dt.files);
-        console.log(`[Seedance批量] 使用 native setter 一次性设置 ${dt.files.length} 个文件`);
-      } else {
-        fileInput.files = dt.files;
-        console.log(`[Seedance批量] 使用直接赋值设置 ${dt.files.length} 个文件`);
-      }
+    console.log(`[Seedance批量] 文件数据准备完成, 大小: ${filesData.map(f => Math.round(f.base64.length * 0.75 / 1024) + 'KB').join(', ')}`);
 
-      // 触发多种事件以确保框架捕获
-      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-      fileInput.dispatchEvent(new Event('input', { bubbles: true }));
-      console.log(`[Seedance批量] 已通过 input 一次性上传 ${allFiles.length} 个文件`);
-      // 等待所有文件上传完成
-      await sleep(2000 + allFiles.length * 500);
+    // 通过 postMessage 发送到 MAIN world
+    const eventName = 'seedance-upload-result-' + Date.now();
 
-      return true;
-    }
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        console.error('[Seedance批量] ❌ MAIN world 文件上传超时 (15秒)');
+        reject(new Error('MAIN world 文件上传超时'));
+      }, 15000);
 
-    // 尝试拖放上传
-    console.log('[Seedance批量] 未找到 file input，尝试拖放上传...');
-    const dropSelectors = [
-      '[class*="reference-upload"]',
-      '[class*="upload-area"]',
-      '[class*="drop-zone"]',
-      '[class*="upload"]',
-    ];
-    for (const sel of dropSelectors) {
-      const dropZone = document.querySelector(sel);
-      if (dropZone && dropZone.offsetParent !== null) {
-        const dtTransfer = new DataTransfer();
-        for (const file of allFiles) {
-          dtTransfer.items.add(file);
+      function handler(e) {
+        if (!e.data || e.data.type !== eventName) return;
+        window.removeEventListener('message', handler);
+        clearTimeout(timeout);
+
+        const detail = e.data.detail;
+        if (detail && detail.success) {
+          console.log(`[Seedance批量] ✅ MAIN world 上传成功: ${detail.fileCount} 个文件, reactOnChange=${detail.reactOnChangeCalled}`);
+          resolve(true);
+        } else {
+          console.error(`[Seedance批量] ❌ MAIN world 上传失败: ${detail?.error || '未知错误'}`);
+          reject(new Error(detail?.error || 'MAIN world upload failed'));
         }
-        dropZone.dispatchEvent(new DragEvent('dragenter', { bubbles: true, dataTransfer: dtTransfer }));
-        dropZone.dispatchEvent(new DragEvent('dragover', { bubbles: true, dataTransfer: dtTransfer }));
-        dropZone.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dtTransfer }));
-        console.log(`[Seedance批量] 已通过拖放上传 ${allFiles.length} 个文件 (${sel})`);
-        await sleep(2000 + allFiles.length * 500);
-        return true;
       }
-    }
 
-    throw new Error('未找到上传入口 (无 file input，无拖放区域)');
+      window.addEventListener('message', handler);
+
+      // 发送上传请求到 MAIN world
+      console.log(`[Seedance批量] 📤 发送文件到 MAIN world (eventName=${eventName})`);
+      window.postMessage({
+        type: 'seedance-upload-files',
+        filesData: filesData,
+        eventName: eventName
+      }, '*');
+    });
   }
 
   // ============================================================
@@ -1008,22 +1156,483 @@
   async function clickGenerate() {
     const btn = findSubmitButton();
     if (!btn) {
-      throw new Error('未找到生成按钮');
+      // 诊断信息
+      const allBtns = document.querySelectorAll('button');
+      const btnTexts = Array.from(allBtns).slice(0, 20).map(b => `"${b.textContent.trim().substring(0, 20)}" class=${b.className.substring(0, 40)}`);
+      console.error('[Seedance批量] 未找到生成按钮! 页面上的按钮:', btnTexts.join(' | '));
+      throw new Error('未找到生成按钮，请确认页面处于视频生成模式');
     }
 
-    if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') {
-      console.warn('[Seedance批量] 生成按钮当前禁用');
+    const rect = btn.getBoundingClientRect();
+    const btnText = btn.textContent.trim().substring(0, 20) || '(icon-only)';
+    const isDisabled = btn.disabled || btn.classList.contains('lv-btn-disabled') || btn.getAttribute('aria-disabled') === 'true';
+    console.log(`[Seedance批量] 找到生成按钮: tag=${btn.tagName} text="${btnText}" class="${btn.className.substring(0, 80)}" rect=(${Math.round(rect.x)},${Math.round(rect.y)},${Math.round(rect.width)}x${Math.round(rect.height)}) disabled=${isDisabled}`);
+
+    if (isDisabled) {
+      console.warn('[Seedance批量] 生成按钮当前禁用，尝试移除 disabled 后点击');
+      // 临时移除禁用状态
+      btn.disabled = false;
+      btn.classList.remove('lv-btn-disabled');
+      btn.removeAttribute('aria-disabled');
+      await sleep(100);
     }
 
-    simulateClick(btn);
-    console.log('[Seedance批量] 已点击生成按钮');
+    // 尝试1: 通过 React __reactProps$ 直接调用 onClick
+    let reactClicked = false;
+    const reactPropsKey = Object.keys(btn).find(k => k.startsWith('__reactProps$'));
+    if (reactPropsKey && btn[reactPropsKey]?.onClick) {
+      try {
+        console.log('[Seedance批量] 通过 React props onClick 直接调用');
+        const syntheticEvent = { preventDefault: () => {}, stopPropagation: () => {}, target: btn, currentTarget: btn, nativeEvent: new MouseEvent('click') };
+        btn[reactPropsKey].onClick(syntheticEvent);
+        reactClicked = true;
+      } catch (e) {
+        console.warn('[Seedance批量] React onClick 调用失败:', e.message);
+      }
+    }
+
+    // 尝试2: 使用增强点击: PointerEvent + MouseEvent + native click
+    if (!reactClicked) {
+      console.log('[Seedance批量] 使用 simulateClickEnhanced 点击');
+    }
+    simulateClickEnhanced(btn);
+
+    // 如果之前是禁用状态，恢复
+    if (isDisabled) {
+      await sleep(500);
+      // 不恢复禁用 —— 如果生成成功，页面会自己管理状态
+    }
+
+    console.log(`[Seedance批量] 已点击生成按钮 (react=${reactClicked})`);
     await sleep(2000);
+    return `tag=${btn.tagName} text="${btnText}" pos=(${Math.round(rect.x)},${Math.round(rect.y)}) react=${reactClicked} wasDisabled=${isDisabled}`;
+  }
+
+  // 增强版点击: 包含 PointerEvent (React 17+ 需要)
+  function simulateClickEnhanced(el) {
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const evtInit = { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse' };
+    el.dispatchEvent(new PointerEvent('pointerdown', evtInit));
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+    el.dispatchEvent(new PointerEvent('pointerup', evtInit));
+    el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+    // 兜底: native click
+    el.click();
   }
 
   // ============================================================
-  // 清除已上传的参考图
+  // 根据任务ID查找页面上的视频结果
+  // ============================================================
+
+  /**
+   * 在页面上查找包含 taskCode 的所有 video-record 元素
+   * 返回 { normalRecords: [], hdRecords: [] }
+   */
+  function findRecordsByTaskCode(taskCode) {
+    const normalRecords = [];
+    const hdRecords = [];
+
+    // 主选择器: video-record 和 ai-generated-record
+    const allRecords = document.querySelectorAll('[class*="video-record-"], [class*="ai-generated-record"]');
+    for (const record of allRecords) {
+      if (record.closest('#seedance-drawer-container')) continue;
+      const text = record.textContent || '';
+      if (!text.includes(taskCode)) continue;
+      // 是否有 hd-label (提升分辨率完成) 或 record-header 包含"提升分辨率"(正在提升中)
+      const hdLabel = record.querySelector('[class*="hd-label"]');
+      const headerEl = record.querySelector('[class*="record-header"]');
+      const isHD = !!hdLabel || (headerEl && headerEl.textContent.includes('提升分辨率'));
+      if (isHD) {
+        hdRecords.push(record);
+      } else {
+        normalRecords.push(record);
+      }
+    }
+
+    // 如果没找到，尝试更宽泛的搜索
+    if (normalRecords.length === 0 && hdRecords.length === 0) {
+      const scrollContainers = document.querySelectorAll('.scrollbar-container, [class*="scroll-container"], [class*="record-list"]');
+      for (const container of scrollContainers) {
+        if (container.closest('#seedance-drawer-container')) continue;
+        if (container.textContent?.includes(taskCode)) {
+          const walker = document.createTreeWalker(container, NodeFilter.SHOW_ELEMENT, {
+            acceptNode: (node) => {
+              if (node.textContent?.includes(taskCode) && node.querySelector('video, [class*="video"]')) {
+                return NodeFilter.FILTER_ACCEPT;
+              }
+              return NodeFilter.FILTER_SKIP;
+            }
+          });
+          let node;
+          while (node = walker.nextNode()) {
+            const hdLabel2 = node.querySelector('[class*="hd-label"]');
+            const headerEl2 = node.querySelector('[class*="record-header"]');
+            const isHD = !!hdLabel2 || (headerEl2 && headerEl2.textContent.includes('提升分辨率'));
+            if (isHD) hdRecords.push(node);
+            else normalRecords.push(node);
+          }
+          if (normalRecords.length > 0 || hdRecords.length > 0) break;
+        }
+      }
+    }
+
+    return { normalRecords, hdRecords };
+  }
+
+  /**
+   * 从 record 元素中提取视频信息
+   */
+  function extractVideoInfo(record, taskCode, isHD) {
+    // 二次确认: 如果 record-header 包含"提升分辨率"，则标记为 HD (正在提升分辨率中)
+    if (!isHD) {
+      const headerEl = record.querySelector('[class*="record-header"]');
+      if (headerEl && headerEl.textContent.includes('提升分辨率')) {
+        isHD = true;
+      }
+    }
+
+    // ★ 优先检查是否在生成中 (必须在 video 检查之前，避免误判为 completed)
+    const progressTips = record.querySelector('[class*="progress-tips-"]');
+    if (progressTips && progressTips.textContent.includes('造梦中')) {
+      return { found: true, status: 'generating', isHD, message: `任务 ${taskCode} 正在${isHD ? '提升分辨率' : '生成'}中（造梦中）...` };
+    }
+    // 兜底: video-record-content 的 textContent 包含 "造梦中"
+    const vrc = record.querySelector('[class*="video-record-content-"]');
+    if (vrc && vrc.textContent.includes('造梦中')) {
+      return { found: true, status: 'generating', isHD, message: `任务 ${taskCode} 正在${isHD ? '提升分辨率' : '生成'}中（造梦中）...` };
+    }
+    // 兜底: record 整体 textContent 包含 "造梦中"
+    if (record.textContent.includes('造梦中')) {
+      return { found: true, status: 'generating', isHD, message: `任务 ${taskCode} 正在${isHD ? '提升分辨率' : '生成'}中（造梦中）...` };
+    }
+    // 兜底: 其他 loading/progress 指示器
+    const loadingEl = record.querySelector('[class*="loading"], [class*="generating"], [class*="spinner"]');
+    if (loadingEl && loadingEl.offsetParent !== null) {
+      return { found: true, status: 'generating', isHD, message: `任务 ${taskCode} 正在${isHD ? '提升分辨率' : '生成'}中...` };
+    }
+
+    // 确认非生成中后，检查视频
+    const videoEl = record.querySelector('video');
+    if (videoEl) {
+      const videoSrc = videoEl.src || videoEl.querySelector('source')?.src || '';
+      if (videoSrc) {
+        return {
+          found: true,
+          status: 'completed',
+          videoUrl: videoSrc,
+          isHD,
+          message: `找到任务 ${taskCode} 的${isHD ? '高清' : ''}视频`,
+        };
+      }
+    }
+
+    // 检查是否有失败标志
+    const failEl = record.querySelector('[class*="fail"], [class*="error"], [class*="retry"]');
+    if (failEl && failEl.offsetParent !== null) {
+      return { found: true, status: 'failed', isHD, message: `任务 ${taskCode} ${isHD ? '提升分辨率' : '生成'}失败` };
+    }
+
+    // 图片
+    const imgEl = record.querySelector('img:not([class*="reference"]):not([class*="skeleton"]):not([class*="origin-record"])');
+    if (imgEl && imgEl.src && !imgEl.src.includes('data:')) {
+      return { found: true, status: 'completed', videoUrl: imgEl.src, isImage: true, isHD, message: `任务 ${taskCode} 生成的是图片` };
+    }
+
+    return { found: true, status: 'unknown', isHD, message: `找到任务 ${taskCode} 的记录但无法确定状态` };
+  }
+
+  async function findVideoByTaskCode(taskCode) {
+    if (!taskCode || taskCode.trim().length === 0) {
+      throw new Error('请输入任务ID');
+    }
+    taskCode = taskCode.trim();
+    console.log(`[Seedance批量] 🔍 查找视频: ${taskCode}`);
+
+    const { normalRecords, hdRecords } = findRecordsByTaskCode(taskCode);
+
+    if (normalRecords.length === 0 && hdRecords.length === 0) {
+      console.warn(`[Seedance批量] 未找到任务 ${taskCode} 的记录`);
+      // 检查页面是否有正在生成的任务: progress-badge + progress-tips 包含 "造梦中"
+      const progressTipsEls = document.querySelectorAll('[class*="progress-tips-"]');
+      const pageHasGenerating = Array.from(progressTipsEls).some(el =>
+        !el.closest('#seedance-drawer-container') && el.textContent.includes('造梦中')
+      );
+      return {
+        found: false,
+        status: 'not_found',
+        message: `未在页面上找到任务 ${taskCode} 的记录。请确认任务ID正确，且该记录在页面可见区域内。`,
+        pageHasGenerating,
+        hasHDVersion: false,
+        hasNormalVersion: false,
+      };
+    }
+
+    const hasHDVersion = hdRecords.length > 0;
+    const hasNormalVersion = normalRecords.length > 0;
+
+    // 优先返回 HD 版本
+    if (hasHDVersion) {
+      const info = extractVideoInfo(hdRecords[0], taskCode, true);
+      info.hasHDVersion = true;
+      info.hasNormalVersion = hasNormalVersion;
+      console.log(`[Seedance批量] ✅ 找到HD视频: ${info.videoUrl?.substring(0, 80) || info.status}`);
+      return info;
+    }
+
+    // 返回普通版本
+    const info = extractVideoInfo(normalRecords[0], taskCode, false);
+    info.hasHDVersion = false;
+    info.hasNormalVersion = true;
+    console.log(`[Seedance批量] 找到普通视频: ${info.videoUrl?.substring(0, 80) || info.status}`);
+    return info;
+  }
+
+  // ============================================================
+  // 触发原生下载 (通过 MAIN world 点击视频上的下载按钮)
+  // ============================================================
+  async function triggerNativeDownload(taskCode, preferHD = true) {
+    taskCode = taskCode.trim();
+    console.log(`[Seedance批量] ⬇️ 触发原生下载: ${taskCode}, preferHD=${preferHD}`);
+
+    const { normalRecords, hdRecords } = findRecordsByTaskCode(taskCode);
+    const records = preferHD && hdRecords.length > 0 ? hdRecords : normalRecords;
+    if (records.length === 0) {
+      return { downloaded: false, message: '未找到视频记录' };
+    }
+
+    const record = records[0];
+
+    // 为 record 生成一个临时选择器, 供 MAIN world 定位
+    const tempId = 'seedance-dl-' + Date.now();
+    record.setAttribute('data-seedance-dl', tempId);
+    const selector = `[data-seedance-dl="${tempId}"]`;
+
+    try {
+      const eventName = 'seedance-download-result-' + Date.now();
+      const result = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          window.removeEventListener('message', handler);
+          resolve({ downloaded: false, message: '下载操作超时 (10秒)' });
+        }, 10000);
+
+        function handler(e) {
+          if (!e.data || e.data.type !== eventName) return;
+          window.removeEventListener('message', handler);
+          clearTimeout(timeout);
+          const detail = e.data.detail;
+          if (detail && detail.success) {
+            console.log(`[Seedance批量] ✅ MAIN world 下载成功: ${detail.method}`);
+            resolve({ downloaded: true, message: `已触发下载 (${detail.method})` });
+          } else if (detail && detail.fallbackUrl) {
+            console.log(`[Seedance批量] ⚠️ MAIN world 未找到下载按钮, fallback URL: ${detail.fallbackUrl.substring(0, 80)}`);
+            resolve({ downloaded: false, fallbackUrl: detail.fallbackUrl, message: detail.error || '未找到下载按钮' });
+          } else {
+            console.error(`[Seedance批量] ❌ MAIN world 下载失败: ${detail?.error}`);
+            resolve({ downloaded: false, message: detail?.error || '下载失败' });
+          }
+        }
+
+        window.addEventListener('message', handler);
+        window.postMessage({
+          type: 'seedance-click-download',
+          selector: selector,
+          eventName: eventName
+        }, '*');
+      });
+
+      return result;
+    } finally {
+      record.removeAttribute('data-seedance-dl');
+    }
+  }
+
+  // ============================================================
+  // 触发提升分辨率 (通过 MAIN world 操作)
+  // ============================================================
+  async function triggerUpscale(taskCode) {
+    taskCode = taskCode.trim();
+    console.log(`[Seedance批量] 🔺 触发提升分辨率: ${taskCode}`);
+
+    const { normalRecords, hdRecords } = findRecordsByTaskCode(taskCode);
+
+    // 如果已经有 HD 版本
+    if (hdRecords.length > 0) {
+      return { triggered: false, alreadyHD: true, message: '该视频已有高清版本' };
+    }
+
+    if (normalRecords.length === 0) {
+      return { triggered: false, message: '未找到视频记录' };
+    }
+
+    const record = normalRecords[0];
+    const tempId = 'seedance-up-' + Date.now();
+    record.setAttribute('data-seedance-up', tempId);
+    const selector = `[data-seedance-up="${tempId}"]`;
+
+    try {
+      const eventName = 'seedance-upscale-result-' + Date.now();
+      const result = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          window.removeEventListener('message', handler);
+          resolve({ triggered: false, message: '提升分辨率操作超时 (15秒)' });
+        }, 15000);
+
+        function handler(e) {
+          if (!e.data || e.data.type !== eventName) return;
+          window.removeEventListener('message', handler);
+          clearTimeout(timeout);
+          const detail = e.data.detail;
+          if (detail && detail.success) {
+            console.log(`[Seedance批量] ✅ 提升分辨率已触发: ${detail.message}`);
+            resolve({ triggered: true, message: detail.message || '已触发提升分辨率' });
+          } else {
+            console.error(`[Seedance批量] ❌ 提升分辨率失败: ${detail?.error}`);
+            resolve({ triggered: false, message: detail?.error || '提升分辨率失败' });
+          }
+        }
+
+        window.addEventListener('message', handler);
+        window.postMessage({
+          type: 'seedance-click-upscale',
+          selector: selector,
+          eventName: eventName
+        }, '*');
+      });
+
+      return result;
+    } finally {
+      record.removeAttribute('data-seedance-up');
+    }
+  }
+
+  // ============================================================
+  // 在页面上下文中下载视频文件 (fetch + blob + <a download>)
+  // ============================================================
+  async function downloadVideoFile(url, filename) {
+    console.log(`[Seedance批量] ⬇️ 下载视频文件: ${filename}, URL: ${url.substring(0, 80)}...`);
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      console.log(`[Seedance批量] ✅ 下载完成: ${filename}, size=${blob.size}`);
+      return { downloaded: true, message: `下载完成: ${filename}`, size: blob.size };
+    } catch (err) {
+      console.error(`[Seedance批量] ❌ 下载失败: ${err.message}`);
+      return { downloaded: false, message: `下载失败: ${err.message}` };
+    }
+  }
+
+  // ============================================================
+  // 捕获视频并上传到服务器
+  // ============================================================
+  async function captureAndUploadVideo(taskCode, serverUrl, qualityFilter = '') {
+    taskCode = taskCode.trim();
+    if (!taskCode) throw new Error('请输入任务号');
+    if (!serverUrl) throw new Error('请配置服务器地址');
+
+    console.log(`[Seedance批量] 📤 捕获并上传视频: ${taskCode} → ${serverUrl} (filter: ${qualityFilter || 'all'})`);
+
+    const { normalRecords, hdRecords } = findRecordsByTaskCode(taskCode);
+    if (normalRecords.length === 0 && hdRecords.length === 0) {
+      return { uploaded: 0, message: '未找到视频记录' };
+    }
+
+    const results = [];
+
+    // 上传 HD 版本 (如果不指定 qualityFilter 或指定 'hd')
+    if ((!qualityFilter || qualityFilter === 'hd') && hdRecords.length > 0) {
+      const info = extractVideoInfo(hdRecords[0], taskCode, true);
+      if (info.videoUrl && info.status === 'completed') {
+        try {
+          const result = await fetchAndUploadToServer(info.videoUrl, taskCode, 'hd', serverUrl);
+          results.push(result);
+        } catch (err) {
+          console.error(`[Seedance批量] ❌ HD版本上传失败:`, err.message);
+          results.push({ success: false, quality: 'hd', error: err.message });
+        }
+      }
+    }
+
+    // 上传普通版本 (如果不指定 qualityFilter 或指定 'standard')
+    if ((!qualityFilter || qualityFilter === 'standard') && normalRecords.length > 0) {
+      const info = extractVideoInfo(normalRecords[0], taskCode, false);
+      if (info.videoUrl && info.status === 'completed') {
+        try {
+          const result = await fetchAndUploadToServer(info.videoUrl, taskCode, 'standard', serverUrl);
+          results.push(result);
+        } catch (err) {
+          console.error(`[Seedance批量] ❌ 标准版本上传失败:`, err.message);
+          results.push({ success: false, quality: 'standard', error: err.message });
+        }
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    console.log(`[Seedance批量] 📤 上传完成: ${successCount}/${results.length} 成功`);
+    return {
+      uploaded: successCount,
+      total: results.length,
+      results,
+      message: successCount > 0
+        ? `已上传 ${successCount} 个视频到服务器`
+        : '上传失败: ' + (results[0]?.error || '未知错误'),
+    };
+  }
+
+  async function fetchAndUploadToServer(videoUrl, taskCode, quality, serverUrl) {
+    console.log(`[Seedance批量] ⬇️ 抓取视频: ${quality}, URL: ${videoUrl.substring(0, 80)}...`);
+
+    const resp = await fetch(videoUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const blob = await resp.blob();
+
+    // 获取 MIME 类型
+    const mimeType = blob.type || 'video/mp4';
+    const ext = mimeType.includes('mp4') ? 'mp4' : (mimeType.includes('webm') ? 'webm' : 'mp4');
+    const filename = `${taskCode}_${quality}_${Date.now()}.${ext}`;
+
+    console.log(`[Seedance批量] 📤 上传文件: ${filename}, size=${blob.size}, type=${mimeType}`);
+
+    // 使用 FormData 上传 (二进制, 不用 base64)
+    const formData = new FormData();
+    formData.append('file', blob, filename);
+    formData.append('taskCode', taskCode);
+    formData.append('quality', quality);
+    formData.append('mimeType', mimeType);
+    formData.append('originalUrl', videoUrl);
+
+    const uploadResp = await fetch(`${serverUrl}/api/files/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!uploadResp.ok) throw new Error(`上传失败 HTTP ${uploadResp.status}`);
+    const result = await uploadResp.json();
+
+    if (!result.success) throw new Error(result.error || '服务器返回失败');
+
+    console.log(`[Seedance批量] ✅ 上传成功: ${filename}`);
+    return { success: true, quality, filename, size: blob.size, fileId: result.fileId };
+  }
+
+  // ============================================================
+  // 清除已上传的参考图 (仅在参考上传区域内查找删除按钮)
   // ============================================================
   async function clearReferenceImage() {
+    // 与原版一致: 全局查找删除/移除/关闭按钮 (不做 hover, 避免触发 tooltip)
     const selectors = [
       '[class*="delete"]',
       '[class*="Delete"]',
@@ -1035,7 +1644,7 @@
 
     for (const sel of selectors) {
       const btn = document.querySelector(sel);
-      if (btn && btn.offsetParent !== null) {
+      if (btn && btn.offsetParent !== null && !btn.closest('#seedance-drawer-container')) {
         simulateClick(btn);
         console.log(`[Seedance批量] 已清除参考图 (${sel})`);
         await sleep(500);
@@ -1043,7 +1652,7 @@
       }
     }
 
-    // hover swap 按钮后清除
+    // hover swap 按钮后清除 (原版也有此逻辑)
     const swapBtn = document.querySelector('[class*="swap-button"]');
     if (swapBtn && swapBtn.offsetParent !== null) {
       swapBtn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
@@ -1052,18 +1661,24 @@
 
       for (const sel of selectors) {
         const btn = document.querySelector(sel);
-        if (btn && btn.offsetParent !== null) {
+        if (btn && btn.offsetParent !== null && !btn.closest('#seedance-drawer-container')) {
           simulateClick(btn);
-          console.log('[Seedance批量] 已清除参考图 (hover后)');
+          console.log('[Seedance批量] 已清除参考图 (swap hover后)');
+          // 清除 hover 状态, 防止残留 tooltip
+          swapBtn.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
           await sleep(500);
           return true;
         }
       }
+
+      // 没找到按钮也要清除 hover 状态
+      swapBtn.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
     }
 
+    // 文本匹配
     const removeBtn = findByText('span, div, button', '删除')
       || findByText('span, div, button', '移除');
-    if (removeBtn) {
+    if (removeBtn && !removeBtn.closest('#seedance-drawer-container')) {
       simulateClick(removeBtn);
       console.log('[Seedance批量] 已清除参考图 (文本)');
       await sleep(500);
@@ -1089,6 +1704,71 @@
     }
     console.log(`[Seedance批量] 共清除 ${cleared} 张参考图`);
     return cleared;
+  }
+
+  // ============================================================
+  // 设置画面比例 (独立函数，可在不同流程中复用)
+  // ============================================================
+  async function setAspectRatio(targetRatio) {
+    const toolbar = findToolbar();
+    if (!toolbar) {
+      console.warn('[Seedance批量] setAspectRatio: 未找到工具栏');
+      return false;
+    }
+
+    const ratioBtn = toolbar.querySelector('button[class*="toolbar-button"]');
+    if (!ratioBtn) {
+      console.warn('[Seedance批量] setAspectRatio: 未找到比例按钮');
+      return false;
+    }
+
+    const currentRatio = ratioBtn.textContent.trim();
+    if (currentRatio === targetRatio) {
+      console.log(`[Seedance批量] 比例: 已是 "${targetRatio}"`);
+      return true;
+    }
+
+    console.log(`[Seedance批量] 比例: "${currentRatio}" → "${targetRatio}"`);
+    simulateClick(ratioBtn);
+    await sleep(500);
+
+    // 查找比例选项 (span.label-* 在弹出面板中)
+    let ratioSet = false;
+    const ratioLabels = document.querySelectorAll('[class*="label-"]');
+    for (const label of ratioLabels) {
+      if (label.textContent.trim() === targetRatio && label.offsetParent !== null) {
+        // 点击父元素（比例选项容器）
+        const clickTarget = label.closest('[class*="ratio-option"]') || label.parentElement || label;
+        simulateClick(clickTarget);
+        ratioSet = true;
+        break;
+      }
+    }
+
+    if (!ratioSet) {
+      // 备用: 找任何包含比例文本的可点击元素
+      const allEls = document.querySelectorAll('div, span, button');
+      for (const el of allEls) {
+        if (el.textContent.trim() === targetRatio && el.offsetParent !== null) {
+          const rect = el.getBoundingClientRect();
+          // 只点击比例弹出面板中的元素 (位置在工具栏下方)
+          if (rect.y > 350 && rect.height < 50) {
+            simulateClick(el);
+            ratioSet = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (ratioSet) {
+      console.log(`[Seedance批量] 比例: 已选择 "${targetRatio}"`);
+    } else {
+      console.warn(`[Seedance批量] 比例: 未找到选项 "${targetRatio}"`);
+      document.body.click(); // 关闭弹出
+    }
+    await sleep(400);
+    return ratioSet;
   }
 
   // ============================================================

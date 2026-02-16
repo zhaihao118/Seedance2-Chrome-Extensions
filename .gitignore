@@ -7,3 +7,5 @@ playwright/screenshots/
 playwright/test-upload.png
 playwright/test-output.txt
 images/test-*.png
+uploads/
+data/
