@@ -252,6 +252,78 @@
   }
   .btn-open:hover { background: rgba(139,143,163,0.3); }
 
+  /* 标签筛选区 */
+  .tag-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    background: #16213e;
+    border: 1px solid #1e3a5f;
+    border-radius: 10px;
+  }
+  .tag-filter-label {
+    font-size: 13px;
+    color: #a8d8ea;
+    white-space: nowrap;
+  }
+  .tag-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag-chip {
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid #1e3a5f;
+    background: #0d1b36;
+    color: #8b8fa3;
+    transition: all 0.15s;
+  }
+  .tag-chip:hover {
+    border-color: #3a7bd5;
+    color: #a8d8ea;
+  }
+  .tag-chip.active {
+    background: rgba(58,123,213,0.25);
+    border-color: #3a7bd5;
+    color: #a8d8ea;
+    font-weight: 500;
+  }
+  .tag-filter-clear {
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 11px;
+    cursor: pointer;
+    border: 1px solid #e9456040;
+    background: transparent;
+    color: #e94560;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .tag-filter-clear:hover {
+    background: rgba(233,69,96,0.1);
+  }
+  /* 任务组头部标签 */
+  .group-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-left: 6px;
+  }
+  .group-tag {
+    padding: 1px 7px;
+    border-radius: 3px;
+    font-size: 10px;
+    background: rgba(58,123,213,0.15);
+    color: #a8d8ea;
+  }
+
   /* 空状态 */
   .empty-state {
     text-align: center;
@@ -270,6 +342,84 @@
     color: #8b8fa3;
   }
   .collapsed .toggle-icon { transform: rotate(-90deg); }
+
+  /* 文件关联任务信息（折叠面板） */
+  .task-info-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: #5a9bf5;
+    cursor: pointer;
+    user-select: none;
+    border: none;
+    background: none;
+    transition: color 0.15s;
+  }
+  .task-info-toggle:hover { color: #7ab5ff; }
+  .task-info-toggle .ti-arrow {
+    display: inline-block;
+    font-size: 10px;
+    transition: transform 0.2s;
+    transform: rotate(90deg);
+  }
+  .task-info-toggle.collapsed .ti-arrow { transform: rotate(0deg); }
+  .task-info-panel {
+    display: block;
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: rgba(26, 39, 68, 0.6);
+    border: 1px solid #1e3a5f;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #8b8fa3;
+  }
+  .task-info-panel.collapsed { display: none; }
+
+  /* 文件卡片上直接显示的标签 */
+  .file-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .file-card-tag {
+    padding: 2px 8px;
+    background: rgba(58,123,213,0.2);
+    border: 1px solid rgba(58,123,213,0.35);
+    border-radius: 4px;
+    color: #7ab5ff;
+    font-size: 11px;
+  }
+  .task-info-panel .ti-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 3px;
+  }
+  .task-info-panel .ti-label {
+    color: #556a8a;
+    white-space: nowrap;
+    min-width: 50px;
+  }
+  .task-info-panel .ti-value {
+    color: #cbd5e1;
+    word-break: break-all;
+  }
+  .task-info-panel .ti-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .task-info-panel .ti-tag {
+    padding: 1px 6px;
+    background: rgba(58,123,213,0.15);
+    border-radius: 3px;
+    color: #a8d8ea;
+    font-size: 10px;
+  }
 </style>
 </head>
 <body>
@@ -287,6 +437,13 @@
   <div class="toolbar">
     <input type="text" id="filterInput" placeholder="输入任务号过滤，如 SD-20260215-xxxx...">
     <button class="btn-refresh" id="btnRefresh">🔄 刷新</button>
+  </div>
+
+  <!-- 标签筛选 -->
+  <div class="tag-filter" id="tagFilterArea" style="display:none;">
+    <span class="tag-filter-label">🏷️ 标签筛选:</span>
+    <div class="tag-filter-chips" id="tagFilterChips"></div>
+    <button class="tag-filter-clear" id="tagFilterClear" style="display:none;">✕ 清除</button>
   </div>
 
   <!-- 统计 -->
@@ -328,6 +485,12 @@ const statTasks = document.getElementById('statTasks');
 const statHD = document.getElementById('statHD');
 const statStandard = document.getElementById('statStandard');
 const statSize = document.getElementById('statSize');
+const tagFilterArea = document.getElementById('tagFilterArea');
+const tagFilterChips = document.getElementById('tagFilterChips');
+const tagFilterClear = document.getElementById('tagFilterClear');
+
+let selectedTags = new Set();
+let allKnownTags = [];
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
@@ -347,18 +510,56 @@ function escapeHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function renderTagFilter(tags) {
+  allKnownTags = tags || [];
+  if (allKnownTags.length === 0) {
+    tagFilterArea.style.display = 'none';
+    return;
+  }
+  tagFilterArea.style.display = 'flex';
+  tagFilterChips.innerHTML = allKnownTags.map(tag => {
+    const activeClass = selectedTags.has(tag) ? ' active' : '';
+    return `<span class="tag-chip${activeClass}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</span>`;
+  }).join('');
+  tagFilterClear.style.display = selectedTags.size > 0 ? '' : 'none';
+
+  // 绑定点击
+  tagFilterChips.querySelectorAll('.tag-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const tag = chip.dataset.tag;
+      if (selectedTags.has(tag)) {
+        selectedTags.delete(tag);
+      } else {
+        selectedTags.add(tag);
+      }
+      loadFiles();
+    });
+  });
+}
+
+tagFilterClear.addEventListener('click', () => {
+  selectedTags.clear();
+  loadFiles();
+});
+
 async function loadFiles() {
   const filterValue = filterInput.value.trim();
-  const queryParams = filterValue ? `?taskCode=${encodeURIComponent(filterValue)}` : '';
+  const params = new URLSearchParams();
+  if (filterValue) params.set('taskCode', filterValue);
+  if (selectedTags.size > 0) params.set('tags', Array.from(selectedTags).join(','));
+  const queryStr = params.toString() ? '?' + params.toString() : '';
 
   try {
-    const resp = await fetch(`${API}/api/files${queryParams}`);
+    const resp = await fetch(`${API}/api/files${queryStr}`);
     const data = await resp.json();
 
     if (!data.success) {
       fileList.innerHTML = '<div class="empty-state"><div class="icon">❌</div><h3>加载失败</h3></div>';
       return;
     }
+
+    // 更新标签筛选器
+    renderTagFilter(data.allTags || []);
 
     const files = data.files || [];
     const grouped = data.grouped || {};
@@ -402,14 +603,26 @@ async function loadFiles() {
       const totalTaskSize = taskFiles.reduce((sum, f) => sum + (f.size || 0), 0);
       const latestUpload = taskFiles.reduce((max, f) => f.uploadedAt > max ? f.uploadedAt : max, '');
 
+      // 收集该任务组的标签
+      const groupTagsSet = new Set();
+      for (const tf of taskFiles) {
+        if (tf.taskTags && tf.taskTags.length > 0) {
+          tf.taskTags.forEach(t => groupTagsSet.add(t));
+        }
+      }
+      const groupTagsHtml = groupTagsSet.size > 0
+        ? `<span class="group-tags">${Array.from(groupTagsSet).map(t => `<span class="group-tag">${escapeHtml(t)}</span>`).join('')}</span>`
+        : '';
+
       html += `
         <div class="task-group" id="group-${escapeHtml(taskCode)}">
           <div class="task-group-header" onclick="toggleGroup(this)">
-            <div style="display:flex;align-items:center;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <span class="toggle-icon">▼</span>
               <span class="task-code">${escapeHtml(taskCode)}</span>
               ${hasHD ? '<span class="badge badge-hd" style="font-size:10px;padding:2px 8px;">HD</span>' : ''}
               ${hasStd ? '<span class="badge badge-standard" style="font-size:10px;padding:2px 8px;">标准</span>' : ''}
+              ${groupTagsHtml}
             </div>
             <div class="task-group-meta">
               <span>${taskFiles.length} 个文件</span>
@@ -453,6 +666,49 @@ function renderFileCard(f) {
     previewHtml = `<div style="color:#555;font-size:14px;">📄 ${escapeHtml(f.mimeType || 'unknown')}</div>`;
   }
 
+  // 构建任务信息面板
+  const hasTaskInfo = f.taskPrompt || f.taskDescription || (f.taskTags && f.taskTags.length > 0) || f.taskModelConfig;
+  let taskInfoHtml = '';
+  if (hasTaskInfo) {
+    const uid = `ti-${f.fileId}`;
+    let rows = '';
+    if (f.taskDescription) {
+      rows += `<div class="ti-row"><span class="ti-label">描述:</span><span class="ti-value">${escapeHtml(f.taskDescription)}</span></div>`;
+    }
+    if (f.taskPrompt) {
+      rows += `<div class="ti-row"><span class="ti-label">提示词:</span><span class="ti-value">${escapeHtml(f.taskPrompt)}</span></div>`;
+    }
+    if (f.taskTags && f.taskTags.length > 0) {
+      rows += `<div class="ti-row"><span class="ti-label">标签:</span><span class="ti-tags">${f.taskTags.map(t => `<span class="ti-tag">${escapeHtml(t)}</span>`).join('')}</span></div>`;
+    }
+    if (f.taskModelConfig) {
+      const mc = f.taskModelConfig;
+      const configParts = [
+        mc.model || '', mc.referenceMode || '', mc.aspectRatio || '', mc.duration || ''
+      ].filter(Boolean).join(' · ');
+      rows += `<div class="ti-row"><span class="ti-label">模型:</span><span class="ti-value">${escapeHtml(configParts)}</span></div>`;
+    }
+    if (f.taskRealSubmit) {
+      rows += `<div class="ti-row"><span class="ti-label">提交:</span><span class="ti-value" style="color:#e94560;">真实提交</span></div>`;
+    }
+    if (f.taskCreatedAt) {
+      rows += `<div class="ti-row"><span class="ti-label">任务创建:</span><span class="ti-value">${formatTime(f.taskCreatedAt)}</span></div>`;
+    }
+    // 直接显示标签在卡片上
+    let cardTagsHtml = '';
+    if (f.taskTags && f.taskTags.length > 0) {
+      cardTagsHtml = `<div class="file-card-tags">${f.taskTags.map(t => `<span class="file-card-tag">${escapeHtml(t)}</span>`).join('')}</div>`;
+    }
+    taskInfoHtml = `
+      ${cardTagsHtml}
+      <button class="task-info-toggle" onclick="toggleTaskInfo(this, '${uid}')">
+        <span class="ti-arrow">▶</span> 📋 任务详情
+      </button>
+      <div class="task-info-panel" id="${uid}">
+        ${rows}
+      </div>`;
+  }
+
   return `
     <div class="file-card">
       <div class="file-preview">
@@ -465,6 +721,7 @@ function renderFileCard(f) {
           <span>${formatSize(f.size)}</span>
           <span>${formatTime(f.uploadedAt)}</span>
         </div>
+        ${taskInfoHtml}
         <div class="file-actions">
           <a class="btn-download" href="${fileUrl}" download="${escapeHtml(f.filename)}">⬇️ 下载</a>
           <a class="btn-open" href="${fileUrl}" target="_blank">🔗 新标签</a>
@@ -476,6 +733,13 @@ function renderFileCard(f) {
 function toggleGroup(header) {
   const group = header.parentElement;
   group.classList.toggle('collapsed');
+}
+
+function toggleTaskInfo(btn, panelId) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  const isCollapsed = panel.classList.toggle('collapsed');
+  btn.classList.toggle('collapsed', isCollapsed);
 }
 
 // 事件绑定

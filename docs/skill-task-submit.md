@@ -36,8 +36,11 @@
     "duration": "5s"
   },
   "referenceFiles": [
-    "https://example.com/ref-image-1.jpg",
-    "https://example.com/ref-image-2.png"
+    {
+      "fileName": "图片1",
+      "base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "fileType": "image/png"
+    }
   ],
   "realSubmit": true,
   "priority": 1,
@@ -49,14 +52,17 @@
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
-| `prompt` | string | **是** | `""` | 视频生成提示词。支持 `(@图片N)` 语法引用参考图 |
+| `prompt` | string | **是** | `""` | 视频生成提示词。支持 `(@图片N)` 语法引用参考图。**注意：`(@图片1)` 中的 `图片1` 必须与 `referenceFiles` 数组中对应图片的 `fileName` 完全一致。** |
 | `description` | string | 否 | `""` | 任务描述（仅用于展示） |
 | `modelConfig` | object | 否 | 见下方 | 模型配置参数 |
 | `modelConfig.model` | string | 否 | `"Seedance 2.0 Fast"` | 模型选择 |
 | `modelConfig.referenceMode` | string | 否 | `"全能参考"` | 参考模式 |
 | `modelConfig.aspectRatio` | string | 否 | `"16:9"` | 画面比例 |
 | `modelConfig.duration` | string | 否 | `"5s"` | 视频时长 |
-| `referenceFiles` | string[] | 否 | `[]` | 参考图片 URL 列表 |
+| `referenceFiles` | object[] | 否 | `[]` | 参考图片对象列表 |
+| `referenceFiles[].fileName` | string | **是** | - | 图片文件名（用于在 prompt 中通过 `(@fileName)` 引用） |
+| `referenceFiles[].base64` | string | **是** | - | 图片的 Base64 编码数据（包含 Data URI scheme，如 `data:image/png;base64,...`） |
+| `referenceFiles[].fileType` | string | **是** | - | 文件的 MIME 类型（如 `image/png`、`image/jpeg`） |
 | `realSubmit` | boolean | 否 | `false` | `true`=真实提交生成, `false`=模拟模式（不点击生成按钮） |
 | `priority` | number | 否 | `1` | 优先级 (数字越大越优先) |
 | `tags` | string[] | 否 | `[]` | 任务标签（用于分类/筛选） |
@@ -137,13 +143,13 @@
 
 ### 3. 提示词中的图片引用语法
 
-提示词中使用 `(@图片名)` 引用 `referenceFiles` 中的图片。引用名称需与上传时的文件名匹配。
+提示词中使用 `(@图片名)` 引用 `referenceFiles` 中的图片。**引用名称（如 `图片1`）必须与上传时 `referenceFiles` 数组中对应对象的 `fileName` 字段完全匹配。**
 
 ```
 示例提示词: "一只可爱的猫咪 (@cat.jpg) 在草地上奔跑，阳光明媚"
 ```
 
-上传多张参考图时，可按顺序使用 `(@图片1)` `(@图片2)` 等引用。
+上传多张参考图时，可按顺序使用 `(@图片1)` `(@图片2)` 等引用，前提是 `fileName` 分别为 `图片1`、`图片2`。
 
 ---
 

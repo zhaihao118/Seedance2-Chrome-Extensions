@@ -664,6 +664,8 @@ const server = http.createServer(async (req, res) => {
 
       fs.writeFileSync(filePath, filePart.data);
 
+      // 从 taskStore 中关联任务的原始参数
+      const taskInfo = taskStore.get(taskCode);
       const meta = {
         fileId,
         taskCode,
@@ -675,6 +677,13 @@ const server = http.createServer(async (req, res) => {
         uploadedAt: new Date().toISOString(),
         originalUrl,
         filePath,
+        // 关联任务元数据
+        taskDescription: taskInfo?.description || '',
+        taskPrompt: taskInfo?.prompt || '',
+        taskTags: taskInfo?.tags || [],
+        taskModelConfig: taskInfo?.modelConfig || null,
+        taskRealSubmit: taskInfo?.realSubmit || false,
+        taskCreatedAt: taskInfo?.createdAt || '',
       };
       fileStore.set(fileId, meta);
       saveFileStore();
@@ -691,12 +700,59 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // ===== 文件列表 (按任务号查询) =====
+    // ===== 文件列表 (按任务号查询, 支持 tags 过滤) =====
     if (req.method === 'GET' && pathname === '/api/files') {
       const filterTaskCode = url.searchParams.get('taskCode');
+      const filterTags = url.searchParams.get('tags'); // 逗号分隔多标签
+      const filterTagSet = filterTags ? new Set(filterTags.split(',').map(t => t.trim()).filter(Boolean)) : null;
+
+      // 收集所有唯一标签 (用于前端标签选择器)
+      const allTagsSet = new Set();
+
       const files = [];
       for (const [, meta] of fileStore) {
         if (filterTaskCode && meta.taskCode !== filterTaskCode) continue;
+
+        // 动态从 taskStore 补全缺失的任务元数据 (兼容旧数据)
+        let taskDescription = meta.taskDescription || '';
+        let taskPrompt = meta.taskPrompt || '';
+        let taskTags = meta.taskTags || [];
+        let taskModelConfig = meta.taskModelConfig || null;
+        let taskRealSubmit = meta.taskRealSubmit || false;
+        let taskCreatedAt = meta.taskCreatedAt || '';
+
+        if (!taskDescription && !taskPrompt && taskTags.length === 0 && !taskModelConfig) {
+          const taskInfo = taskStore.get(meta.taskCode);
+          if (taskInfo) {
+            taskDescription = taskInfo.description || '';
+            taskPrompt = taskInfo.prompt || '';
+            taskTags = taskInfo.tags || [];
+            taskModelConfig = taskInfo.modelConfig || null;
+            taskRealSubmit = taskInfo.realSubmit || false;
+            taskCreatedAt = taskInfo.createdAt || '';
+            // 回写到 fileStore 以持久化
+            meta.taskDescription = taskDescription;
+            meta.taskPrompt = taskPrompt;
+            meta.taskTags = taskTags;
+            meta.taskModelConfig = taskModelConfig;
+            meta.taskRealSubmit = taskRealSubmit;
+            meta.taskCreatedAt = taskCreatedAt;
+          }
+        }
+
+        // 收集所有标签
+        for (const tag of taskTags) allTagsSet.add(tag);
+
+        // 按标签过滤 (取交集: 文件必须包含所有选中的标签)
+        if (filterTagSet && filterTagSet.size > 0) {
+          const fileTags = new Set(taskTags);
+          let allMatch = true;
+          for (const ft of filterTagSet) {
+            if (!fileTags.has(ft)) { allMatch = false; break; }
+          }
+          if (!allMatch) continue;
+        }
+
         files.push({
           fileId: meta.fileId,
           taskCode: meta.taskCode,
@@ -705,15 +761,31 @@ const server = http.createServer(async (req, res) => {
           mimeType: meta.mimeType,
           size: meta.size,
           uploadedAt: meta.uploadedAt,
+          taskDescription,
+          taskPrompt,
+          taskTags,
+          taskModelConfig,
+          taskRealSubmit,
+          taskCreatedAt,
         });
       }
+
+      // 如果有回写, 保存一次
+      saveFileStore();
+
       // 按任务号分组
       const grouped = {};
       for (const f of files) {
         if (!grouped[f.taskCode]) grouped[f.taskCode] = [];
         grouped[f.taskCode].push(f);
       }
-      sendJSON(res, { success: true, files, grouped, total: files.length });
+      sendJSON(res, {
+        success: true,
+        files,
+        grouped,
+        total: files.length,
+        allTags: Array.from(allTagsSet).sort(),
+      });
       return;
     }
 
