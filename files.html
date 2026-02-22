@@ -701,10 +701,10 @@ function renderFileCard(f) {
     }
     taskInfoHtml = `
       ${cardTagsHtml}
-      <button class="task-info-toggle" onclick="toggleTaskInfo(this, '${uid}')">
+      <button class="task-info-toggle collapsed" onclick="toggleTaskInfo(this, '${uid}')">
         <span class="ti-arrow">▶</span> 📋 任务详情
       </button>
-      <div class="task-info-panel" id="${uid}">
+      <div class="task-info-panel collapsed" id="${uid}">
         ${rows}
       </div>`;
   }
